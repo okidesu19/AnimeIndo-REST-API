@@ -46,7 +46,7 @@ def animeView(view: ViewType, order_by: OrderBy = OrderBy.LATEST) -> PaginatedRe
           animeEpisode=item.select_one('.ep span').text.strip(),
           animeView=item.select_one('.view').text.strip()
         )
-        anime_data.append(anime)
+        anime_data.append(anime.dict())
     
     return PaginatedResponse(
       status=200,
@@ -142,7 +142,7 @@ def schedule(day: Day, page: int = 1) -> PaginatedResponse:
           animeThum=anime_thumb['data-setbg'] if anime_thumb else 'N/A',
           animeSchedule=anime_schedule.text.strip() if anime_schedule else 'N/A'
         )
-        anime_data.append(anime)
+        anime_data.append(anime.dict())
         
     return PaginatedResponse(
       status=200,
@@ -206,7 +206,7 @@ def search(query: str, order_by: OrderBy = OrderBy.LATEST, page: int = 1) -> Pag
           animeView=anime_view.text.strip() if anime_view else 'HD',
           animeStar=anime_star.text.strip() if anime_star else None
         )
-        anime_data.append(anime)
+        anime_data.append(anime.dict())
     
     return PaginatedResponse(
       status=200,
@@ -273,7 +273,7 @@ def propertyGenre(genre: str, order_by: OrderBy = OrderBy.LATEST, page: str = "1
           animeView=anime_view.text.strip() if anime_view else 'HD',
           animeStar=anime_star.text.strip() if anime_star else None
         )
-        anime_data.append(anime)
+        anime_data.append(anime.dict())
     return PaginatedResponse(
       status=200,
       message="success",
@@ -395,7 +395,7 @@ def animeDetail(animeId: str, animeSlug: str, page: int = 1) -> Dict:
 async def streamingUrl(animeId: str, animeSlug: str, episodeId: str) -> Dict:
     url = f'{KURAMANIME_URI}/anime/{animeId}/{animeSlug}/episode/{episodeId}'
     streaming_data = []
-    
+    print(url)
     try:
         async with async_playwright() as p:  # Gunakan async_playwright
             browser = await p.chromium.launch(headless=True)
