@@ -1,7 +1,7 @@
-# 📺 Kuramanime API
+# 📺 ANIME INDO API
 
-A modern REST API for accessing anime data from Kuramanime, built with FastAPI and Playwright.
-
+A modern REST API for accessing anime data, built with FastAPI and Playwright.
+[ANIME INDO REST API](https://animeindo-rest-api.up.railway.app)
 ## 🌟 Features
 
 - 🚀 Fast and reliable anime data scraping
@@ -52,9 +52,9 @@ fastapi dev main.py
 
 ## 📚 Documentation
 Interactive API documentation is available at:
-- Swagger UI: `/docs`
-- ReDoc: `/redoc`
-- 
+- Swagger UI: [`/docs`](https://animeindo-rest-api.up.railway.app/docs)
+- ReDoc: [`/redoc`](https://animeindo-rest-api.up.railway.app/redoc)
+
 ## 📧 Contact
 For questions or support, please contact:
 - Jonathan - jonathansigalinggin012@gmail.com
