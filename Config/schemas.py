@@ -82,8 +82,14 @@ class AnimeDetailResponse(AnimeBase):
   episodes: List[Episode]
   pagination: Optional[PaginationDetail] = None
 
+# class PaginatedResponse(BaseModel):
+#   status: int
+#   message: str
+#   data: List[AnimeViewResponse]
+#   pagination: Dict[str, Optional[int | str]]
+  
 class PaginatedResponse(BaseModel):
   status: int
   message: str
-  data: List[AnimeViewResponse]
-  pagination: Dict[str, Optional[int | str]]
+  data: List[dict]
+  pagination: Dict[str, Optional[Union[int, str]]
