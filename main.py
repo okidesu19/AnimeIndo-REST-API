@@ -1,14 +1,41 @@
-from flask import Flask , jsonify , render_template
-from src.routes.otakudesu import otakudesu_print
-from src.routes.kuramanime import kuramanime_print
+from fastapi import FastAPI
+from src.routes.kuramanime import router as kuramanime_router
 import os
+from fastapi.middleware.cors import CORSMiddleware
 
-app = Flask(__name__)
+app = FastAPI(
+  title="Anime Indo API",
+  description="API for scraping anime data from various sources",
+  version="1.0.0",
+  docs_url="/docs",
+  redoc_url="/redoc",
+)
 
-app.register_blueprint(otakudesu_print, url_prefix='/api/otkd')
-app.register_blueprint(kuramanime_print, url_prefix='/api/krm')
+# CORS Middleware
+app.add_middleware(
+  CORSMiddleware,
+  allow_origins=["*"],
+  allow_credentials=True,
+  allow_methods=["*"],
+  allow_headers=["*"],
+)
 
+# Include routers
+app.include_router(kuramanime_router)
 
-if __name__ == '__main__':
-  app.run(debug=True, port=os.getenv("PORT", default=5000))
-  #app.run(host='0.0.0.0', port=5005)
+@app.get("/", tags=["Root"])
+async def root():
+  return {
+    "message": "Welcome to Anime Indo API",
+    "docs": "/docs",
+    "redoc": "/redoc"
+  }
+
+if __name__ == "__main__":
+  import uvicorn
+  uvicorn.run(
+    app, 
+    host="0.0.0.0", 
+    port=int(os.getenv("PORT", 5000)),
+    reload=True
+  )

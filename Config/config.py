@@ -1,7 +1,8 @@
 import requests
+from fastapi.responses import JSONResponse
 
 OTAKUDESU_URI = 'https://otakudesu.cloud'
-KURAMANIME_URI = 'https://v6.kuramanime.run'
+KURAMANIME_URI = 'https://v8.kuramanime.run/'
 
 #headers
 headers = {
@@ -35,13 +36,15 @@ def responseRq(url):
   return response
 
 # generete_response
-def generete_response(statusCode, status, data):
-  return {
-    'statusCode' : statusCode,
-    'status' : status,
-    'data' : data
+def generate_response(status_code: int, message: str, data: dict | list):
+  response_data = {
+    "status": status_code,
+    "message": message,
+    "data": data
   }
-  
+  return response_data
+
+
 def resolve_safelink(safelink_url):
   # Mengirim permintaan ke safelink untuk mendapatkan URL asli
   response = requests.get(safelink_url, allow_redirects=False)

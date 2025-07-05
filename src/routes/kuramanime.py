@@ -1,45 +1,71 @@
-from flask import Blueprint
-from src.parser.Kuramanime.kuramanime import animeView, genres, shedule, search, propertyGenre, animeDetail, streamingUrl
+from fastapi import APIRouter, HTTPException, Request, Query
+from src.parser.Kuramanime.kuramanime import (
+    animeView, genres, schedule, search, 
+    propertyGenre, animeDetail, streamingUrl
+)
+from Config.schemas import OrderBy, Day, ViewType, PaginatedResponse
 
-kuramanime_print = Blueprint('kuramanime', __name__)
+router = APIRouter(
+  prefix="/api/krm", 
+  tags=["Anime Indo API"], 
+  responses={404: {"description": "Not found"}}
+)
 
-@kuramanime_print.route('/view/<view>/', defaults={'order_by' : 'latest'})
-@kuramanime_print.route('/view/<view>/<order_by>/')
-def animeView_route(view, order_by):
-  return animeView(view, order_by)
+@router.get("/view/{view}", response_model=PaginatedResponse)
+async def anime_view_route(view: ViewType, order_by: OrderBy = Query(OrderBy.LATEST, description="Sorting order")):
+  """Get anime list by view type (ongoing/finished)"""
+  return animeView(view.value, order_by.value)
 
-
-@kuramanime_print.route('/genres/', methods=['GET'])
-def genres_route():
+@router.get("/genres/")
+async def genres_route():
+  """Get list of all available genres"""
   return genres()
 
+@router.get("/schedule/{day}", response_model=PaginatedResponse)
+async def schedule_route(
+  day: Day,
+  page: int = Query(1, gt=0, description="Page number"),
+):
+  """Get anime schedule by day"""
+  return schedule(day.value, page)
 
-@kuramanime_print.route('/shedule/<hari>/', defaults={'page' : 1})
-@kuramanime_print.route('/shedule/<hari>&page=<page>')
-def shedule_route(hari, page):
-  return shedule(hari, page)
+@router.get("/search/", response_model=PaginatedResponse)
+async def search_route(
+  query: str = Query(..., min_length=1, description="Search query"),
+  order_by: OrderBy = Query(OrderBy.LATEST, description="Sorting order"),
+  page: int = Query(1, gt=0, description="Page number"),
+):
+  """Search anime by query"""
+  return search(query, order_by.value, page)
+
+@router.get("/genre/{genre}", response_model=PaginatedResponse)
+async def property_genre_route(
+  genre: str,
+  order_by: OrderBy = Query(OrderBy.LATEST, description="Sorting order"),
+  page: int = Query(1, gt=0, description="Page number"),
+):
+  """Get anime list by genre"""
+  return propertyGenre(genre, order_by.value, page)
+
+@router.get("/anime/{animeId}/{animeSlug}/")
+async def detail_route(
+  animeId: str,
+  animeSlug: str,
+  page: str = Query("1", description="Episode page number"),
+):
+  """Get anime details and episodes"""
+  return animeDetail(animeId, animeSlug, page)
+
+@router.get("/anime/{animeId}/{animeSlug}/episode/{episodeId}")
+async def streaming_route(
+  animeId: str,
+  animeSlug: str,
+  episodeId: str,
+):
+  """Get streaming URLs for an episode"""
+  return await streamingUrl(animeId, animeSlug, episodeId)
 
 
-@kuramanime_print.route('/search/<kwy>?order_by=<order_by>/', defaults={'page' : 1})
-@kuramanime_print.route('/search/<kwy>?order_by=<order_by>&page=<page>')
-def search_route(kwy, order_by, page):
-  return search(kwy, order_by, page)
-
-
-@kuramanime_print.route('/genre/<genre>/order_by=<order_by>/', defaults={'page' : 1})
-@kuramanime_print.route('/genre/<genre>/order_by=<order_by>&page=<page>/')
-def propertyGenre_route(genre, order_by, page):
-  return propertyGenre(genre, order_by, page)
-
-
-@kuramanime_print.route('/anime/<animeId>/<animeSlug>/')
-def detail_route(animeId, animeSlug):
-  return animeDetail(animeId, animeSlug)
-
-@kuramanime_print.route('/anime/<animeId>/<animeSlug>/episode/<episodeId>')
-def streaming_route(animeId, animeSlug, episodeId):
-  return streamingUrl(animeId, animeSlug, episodeId)
-  
 
 #>---- Order By ----<#
 #> A-Z = ascending
