@@ -1,5 +1,6 @@
 import requests
 from fastapi.responses import JSONResponse
+from typing import Union, Dict, List
 
 OTAKUDESU_URI = 'https://otakudesu.cloud'
 KURAMANIME_URI = 'https://v8.kuramanime.run/'
@@ -36,7 +37,7 @@ def responseRq(url):
   return response
 
 # generete_response
-def generate_response(status_code: int, message: str, data: dict | list):
+def generate_response(status_code: int, message: str, data: Union[Dict, List]):
   response_data = {
     "status": status_code,
     "message": message,

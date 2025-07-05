@@ -2,5 +2,6 @@ bs4
 requests
 playwright
 gunicorn
+uvicorn
 fastapi
 fastapi[standard]
