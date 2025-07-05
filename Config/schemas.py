@@ -92,4 +92,4 @@ class PaginatedResponse(BaseModel):
   status: int
   message: str
   data: List[dict]
-  pagination: Dict[str, Optional[Union[int, str]]
+  pagination: Dict[str, Optional[Union[int, str]]]
