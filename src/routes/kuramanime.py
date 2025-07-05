@@ -16,7 +16,7 @@ async def anime_view_route(view: ViewType, order_by: OrderBy = Query(OrderBy.LAT
   """Get anime list by view type (ongoing/finished)"""
   return animeView(view.value, order_by.value)
 
-@router.get("/genres/")
+@router.get("/genres")
 async def genres_route():
   """Get list of all available genres"""
   return genres()
@@ -29,7 +29,7 @@ async def schedule_route(
   """Get anime schedule by day"""
   return schedule(day.value, page)
 
-@router.get("/search/", response_model=PaginatedResponse)
+@router.get("/search", response_model=PaginatedResponse)
 async def search_route(
   query: str = Query(..., min_length=1, description="Search query"),
   order_by: OrderBy = Query(OrderBy.LATEST, description="Sorting order"),
@@ -47,7 +47,7 @@ async def property_genre_route(
   """Get anime list by genre"""
   return propertyGenre(genre, order_by.value, page)
 
-@router.get("/anime/{animeId}/{animeSlug}/")
+@router.get("/anime/{animeId}/{animeSlug}")
 async def detail_route(
   animeId: str,
   animeSlug: str,
