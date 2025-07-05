@@ -1,6 +1,6 @@
-FROM python:3.9-slim
+FROM python:3.12-slim  # Sesuaikan dengan versi Python Anda
 
-# Install system dependencies for Playwright
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
@@ -8,16 +8,20 @@ RUN apt-get update && apt-get install -y \
     && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list \
     && apt-get update \
     && apt-get install -y google-chrome-stable \
+    fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-khmeros fonts-kacst fonts-freefont-ttf \
+    libxss1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY . .
 
-# Install Python dependencies
+# Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 RUN playwright install chromium
 RUN playwright install-deps
 
-# Expose port and run Gunicorn
+# Expose port
 EXPOSE 8000
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "main:app"]
+
+# Gunakan Uvicorn sebagai worker untuk FastAPI
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
