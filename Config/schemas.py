@@ -1,6 +1,8 @@
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 from enum import Enum
+from typing import Optional, List, Dict, Union
+from pydantic import BaseModel
 
 class OrderBy(str, Enum):
   ASCENDING = "ascending"
