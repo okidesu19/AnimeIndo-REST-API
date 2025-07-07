@@ -13,7 +13,7 @@ import traceback
 from playwright.async_api import async_playwright
 from typing import Dict, List, Optional
 
-def animeView(view: ViewType, order_by: OrderBy = OrderBy.LATEST) -> PaginatedResponse:
+def animeView(view: ViewType, order_by: OrderBy = OrderBy.LATEST, page: int = 1) -> PaginatedResponse:
   anime_data = []
   
   view_mapping = {
@@ -22,8 +22,9 @@ def animeView(view: ViewType, order_by: OrderBy = OrderBy.LATEST) -> PaginatedRe
   }
   VIEW = view_mapping.get(view, "Ongoing")
   
-  url = f'{KURAMANIME_URI}/quick/{view}?order_by={order_by}&page=1'
+  url = f'{KURAMANIME_URI}/quick/{view}?order_by={order_by}&page={page}'
   response = responseRq(url)
+  max_page = 1
   print(url)
   
   if response.status_code != 200:
@@ -34,9 +35,22 @@ def animeView(view: ViewType, order_by: OrderBy = OrderBy.LATEST) -> PaginatedRe
   
   try:
     soup = BeautifulSoup(response.text, 'html.parser')
-    for item in soup.select('.filter__gallery > a'):
+    
+    # Find max page
+    nav = soup.find('nav', {'aria-label': 'Pagination Navigation'})
+    if nav:
+      page_links = nav.find_all('a', href=True)
+      for link in page_links:
+        href = link['href']
+        if 'page=' in href:
+          page_number = int(href.split('page=')[-1])
+          if page_number > max_page:
+            max_page = page_number
+    
+    
+    for item in soup.select('#animeList > div > a'):
       anime_url = item['href']
-      match = re.search(r'/anime/(\d+)/([^/]+)/', anime_url)
+      match = re.search(r'/anime/(\d+)/([^/]+)', anime_url)
       if match:
         anime = AnimeViewResponse(
           animeId=match.group(1),
@@ -47,15 +61,16 @@ def animeView(view: ViewType, order_by: OrderBy = OrderBy.LATEST) -> PaginatedRe
           animeView=item.select_one('.view').text.strip()
         )
         anime_data.append(anime.dict())
-    
+      else:
+        print("No match found")
     return PaginatedResponse(
       status=200,
       message="success",
       data=anime_data,
       pagination={
         "view": VIEW,
-        "page": 1,
-        "maxPage": 1
+        "page": page,
+        "maxPage": max_page
       }
     )
   except Exception as e:
@@ -469,5 +484,3 @@ async def streamingUrl(animeId: str, animeSlug: str, episodeId: str) -> Dict:
         if 'browser' in locals():
             await browser.close()
         raise HTTPException(status_code=500, detail=str(e))
-        
-        

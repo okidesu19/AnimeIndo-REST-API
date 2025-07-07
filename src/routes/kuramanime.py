@@ -12,9 +12,13 @@ router = APIRouter(
 )
 
 @router.get("/view/{view}", response_model=PaginatedResponse)
-async def anime_view_route(view: ViewType, order_by: OrderBy = Query(OrderBy.LATEST, description="Sorting order")):
+async def anime_view_route(
+  view: ViewType, 
+  order_by: OrderBy = Query(OrderBy.LATEST, description="Sorting order"), 
+  page: int = Query(1, gt=0, description="Page number")
+):
   """Get anime list by view type (ongoing/finished)"""
-  return animeView(view.value, order_by.value)
+  return animeView(view.value, order_by.value, page)
 
 @router.get("/genres")
 async def genres_route():
