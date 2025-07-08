@@ -146,16 +146,22 @@ def schedule(day: Day, page: int = 1) -> PaginatedResponse:
         anime_id = match.group(1)
         anime_name = item.select_one('.sidebar-title-h5')
         anime_episode = item.select_one(f'.actual-schedule-ep-{anime_id}')
+        animeEpisode = anime_episode.text.strip() if anime_episode else 'N/A'
+        matchEpisode = re.search(r'Ep\s*(\d+)', animeEpisode)
+        episode = f"Ep {matchEpisode.group(1)}" if matchEpisode else 'N/A'
         anime_thumb = item.select_one('.set-bg')
         anime_schedule = item.select_one('.view span')
+        animeSchedule = anime_schedule.text.strip() if anime_schedule else 'N/A'
+        matchTime = re.search(r'\((\d{2}:\d{2} WIB)\)', animeSchedule)
+        time = matchTime.group(1) if matchTime else animeSchedule
         
         anime = ScheduleResponse(
           animeId=anime_id,
           animeSlug=match.group(2),
           animeName=anime_name.text.strip() if anime_name else 'N/A',
-          animeEpisode=anime_episode.text.strip() if anime_episode else 'N/A',
+          animeEpisode=episode,
           animeThum=anime_thumb['data-setbg'] if anime_thumb else 'N/A',
-          animeSchedule=anime_schedule.text.strip() if anime_schedule else 'N/A'
+          animeSchedule=time
         )
         anime_data.append(anime.dict())
         
