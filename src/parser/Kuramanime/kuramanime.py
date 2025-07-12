@@ -52,13 +52,20 @@ def animeView(view: ViewType, order_by: OrderBy = OrderBy.LATEST, page: int = 1)
       anime_url = item['href']
       match = re.search(r'/anime/(\d+)/([^/]+)', anime_url)
       if match:
-        anime = AnimeViewResponse(
-          animeId=match.group(1),
+        anime_id = match.group(1)
+        anime_star = item.select_one(f'.actual-anime-{anime_id}')  # Perhatikan typo 'anime' vs 'anime'
+        anime_episode = item.select_one(f'.actual-anime-{anime_id}-ongoing')
+        print(f"ID: {anime_id}")
+        print(f"Star element: {anime_star}")
+        print(f"Episode element: {anime_episode}")
+        anime = SearchResponse(
+          animeId=anime_id,
           animeSlug=match.group(2),
           animeName=item.select_one('.sidebar-title-h5').text.strip(),
           animeThum=item.select_one('.set-bg')['data-setbg'],
-          animeEpisode=item.select_one('.ep span').text.strip(),
-          animeView=item.select_one('.view').text.strip()
+          animeEpisode=anime_episode.text.strip() if anime_episode else None,
+          animeView=item.select_one('.view').text.strip(),
+          animeStar=anime_star.text.strip() if anime_star else None
         )
         anime_data.append(anime.dict())
       else:
