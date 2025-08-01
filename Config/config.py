@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from typing import Union, Dict, List
 
 OTAKUDESU_URI = 'https://otakudesu.cloud'
-KURAMANIME_URI = 'https://v8.kuramanime.run'
+KURAMANIME_URI = 'https://v8.kuramanime.tel'
 
 #headers
 headers = {
