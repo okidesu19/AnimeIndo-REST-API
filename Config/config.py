@@ -1,9 +1,11 @@
 import requests
 from fastapi.responses import JSONResponse
 from typing import Union, Dict, List
+import os
 
 OTAKUDESU_URI = 'https://otakudesu.cloud'
-KURAMANIME_URI = 'https://v8.kuramanime.tel'
+KURAMANIME_URI = os.environ.get('KURAMANIME_URI')'
+
 
 #headers
 headers = {
