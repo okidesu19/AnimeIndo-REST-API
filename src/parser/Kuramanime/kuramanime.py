@@ -25,12 +25,8 @@ def animeView(view: ViewType, order_by: OrderBy = OrderBy.LATEST, page: int = 1)
   url = f'{KURAMANIME_URI}/quick/{view}?order_by={order_by}&page={page}'
   response = responseRq(url)
   print(f'header : {response.headers}')
-<<<<<<< HEAD
   print(f'cookies : {response.cookies}')
-=======
->>>>>>> 9cc6af7f177b0425e509c9ef55aecf015f37db3a
   max_page = 1
-  print(url)
   
   if response.status_code != 200:
     raise HTTPException(
@@ -60,12 +56,9 @@ def animeView(view: ViewType, order_by: OrderBy = OrderBy.LATEST, page: int = 1)
         anime_id = match.group(1)
         anime_star = item.select_one(f'.actual-anime-{anime_id}')  # Perhatikan typo 'anime' vs 'anime'
         anime_episode = item.select_one(f'.actual-anime-{anime_id}-ongoing')
-<<<<<<< HEAD
         # print(f"ID: {anime_id}")
 #         print(f"Star element: {anime_star}")
 #         print(f"Episode element: {anime_episode}")
-=======
->>>>>>> 9cc6af7f177b0425e509c9ef55aecf015f37db3a
         anime = SearchResponse(
           animeId=anime_id,
           animeSlug=match.group(2),
