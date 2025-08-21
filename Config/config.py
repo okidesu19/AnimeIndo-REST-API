@@ -52,9 +52,18 @@ def headersJson(url):
     }
     return headers
 
+def payload(url):
+  return { 
+    'api_key': 'c04932736fc112f09e3a9ed32ec7b2f2', 
+    'url': url,
+    'output_format': 'text', 
+    'autoparse': 'true', 
+    'device_type': 'desktop' 
+  }
+
 def responseRq(url):
-  response = requests.get(url, cookies=cookies)
-  #response = requests.get(url, proxies=proxies, verify=False)
+  #response = requests.get(url, cookies=cookies)
+  response = requests.get('https://api.scraperapi.com/', params=payload(url))
   return response
 
 # generete_response

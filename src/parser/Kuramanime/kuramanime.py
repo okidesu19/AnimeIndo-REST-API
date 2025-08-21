@@ -23,9 +23,10 @@ def animeView(view: ViewType, order_by: OrderBy = OrderBy.LATEST, page: int = 1)
   VIEW = view_mapping.get(view, "Ongoing")
   
   url = f'{KURAMANIME_URI}/quick/{view}?order_by={order_by}&page={page}'
+  #print(url)
   response = responseRq(url)
-  print(f'header : {response.headers}')
-  print(f'cookies : {response.cookies}')
+  #print(f'header : {response.headers}')
+  #print(f'cookies : {response.cookies}')
   max_page = 1
   
   if response.status_code != 200:
@@ -36,7 +37,6 @@ def animeView(view: ViewType, order_by: OrderBy = OrderBy.LATEST, page: int = 1)
   
   try:
     soup = BeautifulSoup(response.text, 'html.parser')
-    
     # Find max page
     nav = soup.find('nav', {'aria-label': 'Pagination Navigation'})
     if nav:
@@ -49,7 +49,7 @@ def animeView(view: ViewType, order_by: OrderBy = OrderBy.LATEST, page: int = 1)
             max_page = page_number
     
     
-    for item in soup.select('#animeList > div > a'):
+    for item in soup.select('#animeList > .product__item > a'):
       anime_url = item['href']
       match = re.search(r'/anime/(\d+)/([^/]+)', anime_url)
       if match:
