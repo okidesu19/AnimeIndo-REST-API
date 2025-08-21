@@ -4,3 +4,7 @@ project_type: custom
 build:
   type: dockerfile
   dockerfile: Dockerfile
+
+deploy:
+  type: custom
+  command: uvicorn main:app --host 0.0.0.0 --port $PORT
