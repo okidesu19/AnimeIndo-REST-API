@@ -1,0 +1,6 @@
+# scrapinghub.yml
+project_type: custom
+
+build:
+  type: dockerfile
+  dockerfile: Dockerfile

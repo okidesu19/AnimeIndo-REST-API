@@ -1,7 +1,7 @@
 import requests
 from fastapi.responses import JSONResponse
 from typing import Union, Dict, List
-
+import random
 OTAKUDESU_URI = 'https://otakudesu.cloud'
 KURAMANIME_URI = 'https://v8.kuramanime.tel'
 
@@ -15,26 +15,24 @@ cookies = {
   "show_genre" : "only_not_hentai"
 }
 
+
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+]
+
 headers2 = {
-    "Date": "Fri, 01 Aug 2025 12:17:31 GMT",
-    "Content-Type": "text/html; charset=UTF-8",
-    "Transfer-Encoding": "chunked",
+    "User-Agent": random.choice(USER_AGENTS),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+    "Accept-Encoding": "gzip, deflate",
     "Connection": "keep-alive",
-    "Server": "cloudflare",
-    "Nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
-    "Vary": "Accept-Encoding",
-    "Cache-Control": "no-cache, private",
-    "X-Frame-Options": "SAMEORIGIN",
-    "X-Xss-Protection": "1; mode=block",
-    "X-Content-Type-Options": "nosniff",
-    "Report-To": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=J1jLu616f07ktEGSEuck85rD2JV1GcYTPFDBHRnIn%2FBHlebVth%2BWXE6WuqQlUDiY7XbDxU11nDzrjU220JQWmHETU7zLcqA7Ef8Kk%2FLa5dBA\"}]}",
-    "Cf-Cache-Status": "DYNAMIC",
-    "Speculation-Rules": "\"/cdn-cgi/speculation\"",
-    "Content-Encoding": "gzip",
-    "Set-Cookie": "XSRF-TOKEN=eyJpdiI6InhuTGJsVU1pN1hiTURjUFNmUUprZVE9PSIsInZhbHVlIjoidWxPd05zZ1pFdHBTNFdFRGhWZ1JaTFlialNHdVBSMFY4blZ3NjZoSTkzVWlzeXh5RWpUNWx3dXpDUzZVZ1MwU05BK0g3YXZ1cUhQV3cxajFNaGx0SzRaQ0IzUVpNem1lOTNuMy9sQy9FbjZFUmk3UENUYjZHMnhxYTQyRUUxRE0iLCJtYWMiOiIwNDI5MjViYjNjYmY0Mzk3NTRlOTRkMTYyMjdhYWQ5NmVkNWIwZjZmYzY0NWEyYTRmMzU4YzA1ZDg4Zjk0ZWJjIiwidGFnIjoiIn0%3D; SameSite=Lax; Secure; Path=/; Domain=kuramanime.tel; Max-Age=7200; Expires=Fri, 01 Aug 2025 14:17:31 GMT, kuramanime_session=eyJpdiI6IjFWMjcyVVd1NkRwRDVlbzdSbkJweGc9PSIsInZhbHVlIjoiZUtSbnF3ZUM2clpmRlBjUko4U1pxd2FNYVFQNGRkZ29oMk5zZ0ZKb2xJUlBhbTh3dmVJYzMxQjhoaFNmcVpiMldUQnZvNzZSUXZtNy9XNUVNVm5UbDk1aE52VU85dWw0T0VoaW1iUG1YRkN1TU5jei9QSHhQUjhIUFoyemMzVkMiLCJtYWMiOiJkMzgxNzJhNzI5MTgzNjFmN2VkMWFiOTFkNTUzMjYzMzhiOWFkNzZjNGVlZGY5ODlhMjNmNDIzY2E3YzZiMTQwIiwidGFnIjoiIn0%3D; HttpOnly; SameSite=Lax; Path=/; Domain=kuramanime.tel",
-    "CF-RAY": "968545db08a091b7-SIN",
-    "alt-svc": "h3=\":443\"; ma=86400"
-  }
+    "Referer": "https://www.google.com/",
+    "Upgrade-Insecure-Requests": "1",
+}
+
 
 def headersJson(url):
     headers = {
@@ -55,7 +53,8 @@ def headersJson(url):
     return headers
 
 def responseRq(url):
-  response = requests.get(url, cookies=cookies, headers=headers2)
+  response = requests.get(url, cookies=cookies)
+  #response = requests.get(url, proxies=proxies, verify=False)
   return response
 
 # generete_response
