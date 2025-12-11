@@ -23,20 +23,19 @@ def animeView(view: ViewType, order_by: OrderBy = OrderBy.LATEST, page: int = 1)
   VIEW = view_mapping.get(view, "Ongoing")
   
   url = f'{KURAMANIME_URI}/quick/{view}?order_by={order_by}&page={page}'
-  #print(url)
   response = responseRq(url)
-  #print(f'header : {response.headers}')
-  #print(f'cookies : {response.cookies}')
-  max_page = 1
+  anime_data = []
   
   if response.status_code != 200:
     raise HTTPException(
       status_code=response.status_code,
-      detail="Failed to fetch anime view data"
+      detail="Failed to fetch search results"
     )
   
   try:
     soup = BeautifulSoup(response.text, 'html.parser')
+    max_page = 1
+    
     # Find max page
     nav = soup.find('nav', {'aria-label': 'Pagination Navigation'})
     if nav:
@@ -48,29 +47,41 @@ def animeView(view: ViewType, order_by: OrderBy = OrderBy.LATEST, page: int = 1)
           if page_number > max_page:
             max_page = page_number
     
-    
-    for item in soup.select('#animeList > .product__item > a'):
+
+    # Parse anime items
+    for item in soup.select('.filter__gallery > a'):
       anime_url = item['href']
-      match = re.search(r'/anime/(\d+)/([^/]+)', anime_url)
+      match = re.search(r'anime/(\d+)/(.+)', anime_url)
       if match:
         anime_id = match.group(1)
-        anime_star = item.select_one(f'.actual-anime-{anime_id}')  # Perhatikan typo 'anime' vs 'anime'
-        anime_episode = item.select_one(f'.actual-anime-{anime_id}-ongoing')
-        # print(f"ID: {anime_id}")
-#         print(f"Star element: {anime_star}")
-#         print(f"Episode element: {anime_episode}")
-        anime = SearchResponse(
+        anime_view = item.select_one('.view')
+        anime_thum = item.select_one('.set-bg')
+        anime_name = item.select_one('.sidebar-title-h5')
+
+        # Episode/Star info based on view type
+        anime_episode = None
+        anime_star = None
+        
+        if view == ViewType.ONGOING:
+          # For ongoing anime, show episode info
+          episode_star_tag = item.select_one(f'.actual-anime-{anime_id}-ongoing') or item.select_one('.ep span')
+          anime_episode = episode_star_tag.text.strip() if episode_star_tag else None
+        elif view == ViewType.FINISHED:
+          # For finished anime, show star info
+          star_tag = item.select_one(f'.actual-anime-{anime_id}')
+          anime_star = star_tag.text.strip() if star_tag else None
+        
+        anime = AnimeViewResponse(
           animeId=anime_id,
           animeSlug=match.group(2),
-          animeName=item.select_one('.sidebar-title-h5').text.strip(),
-          animeThum=item.select_one('.set-bg')['data-setbg'],
-          animeEpisode=anime_episode.text.strip() if anime_episode else None,
-          animeView=item.select_one('.view').text.strip(),
-          animeStar=anime_star.text.strip() if anime_star else None
+          animeName=anime_name.text.strip() if anime_name else 'N/A',
+          animeThum=anime_thum['data-setbg'] if anime_thum else None,
+          animeView=anime_view.text.strip() if anime_view else 'HD',
+          animeStar=anime_star,
+          animeEpisode=anime_episode
         )
         anime_data.append(anime.dict())
-      else:
-        print("No match found")
+    
     return PaginatedResponse(
       status=200,
       message="success",
@@ -84,9 +95,116 @@ def animeView(view: ViewType, order_by: OrderBy = OrderBy.LATEST, page: int = 1)
   except Exception as e:
     traceback.print_exc()
     raise HTTPException(
-      status_code=500, 
+      status_code=500,
       detail=str(e)
     )
+
+  # print(url)
+  # response = responseRq(url)
+  # #print(response.text)
+  # #print(f'header : {response.headers}')
+  # #print(f'cookies : {response.cookies}')
+  # max_page = 1
+  
+  # if response.status_code != 200:
+  #   raise HTTPException(
+  #     status_code=response.status_code,
+  #     detail="Failed to fetch anime view data"
+  #   )
+  
+  # try:
+  #   soup = BeautifulSoup(response.text, 'html.parser')
+  #   # Find max page (pagination container is .product__pagination)
+  #   pagination = soup.select_one('.product__pagination')
+  #   if pagination:
+  #     page_links = pagination.find_all('a', href=True)
+  #     for link in page_links:
+  #       href = link['href']
+  #       if href and 'page=' in href:
+  #         try:
+  #           page_number = int(href.split('page=')[-1])
+  #           if page_number > max_page:
+  #             max_page = page_number
+  #         except Exception:
+  #           continue
+
+  #   # Each product item is inside an element with class 'product__item'
+  #   for product in soup.select('#animeList .product__item'):
+  #     # prefer the main anchor (image/title)
+  #     anchor = product.find('a', href=True)
+  #     if not anchor:
+  #       continue
+  #     anime_url = anchor['href']
+  #     match = re.search(r'/anime/(\d+)/([^/]+)', anime_url)
+  #     if not match:
+  #       continue
+
+  #     anime_id = match.group(1)
+
+  #     # Name is inside the text block: h5 > a
+  #     name_tag = product.select_one('.product__item__text h5 a') or product.select_one('h5 a')
+
+  #     # Thumbnail can be in data-setbg or inline style
+  #     thum_tag = product.select_one('.set-bg')
+  #     anime_thum = None
+  #     if thum_tag:
+  #       anime_thum = thum_tag.get('data-setbg') or None
+  #       if not anime_thum:
+  #         # try to extract from style attribute
+  #         style = thum_tag.get('style', '')
+  #         m = re.search(r'url\((?:\"|\')?(.*?)(?:\"|\')?\)', style)
+  #         if m:
+  #           anime_thum = m.group(1)
+
+  #     # Episode info
+  #     episode_tag = product.select_one(f'.actual-anime-{anime_id}-ongoing') or product.select_one('.ep span')
+  #     anime_episode = episode_tag.text.strip() if episode_tag else None
+
+  #     # Status (SELESAI or hidden)
+  #     status_tag = product.select_one('.status span') or product.select_one('.d-none span')
+  #     anime_status = status_tag.text.strip() if status_tag else None
+
+  #     # Comments and views
+  #     comments_tag = product.select_one(f'.comments-count-{anime_id}-ongoing')
+  #     views_tag = product.select_one(f'.views-count-{anime_id}-ongoing')
+  #     comments = comments_tag.text.strip() if comments_tag else None
+  #     views = views_tag.text.strip() if views_tag else None
+
+  #     # Quality (find anchor that links to properties/quality)
+  #     quality_tag = None
+  #     for a in product.select('.product__item__text ul a'):
+  #       href = a.get('href', '')
+  #       if '/properties/quality/' in href:
+  #         li = a.find('li')
+  #         quality_tag = li.text.strip() if li else a.text.strip()
+  #         break
+
+  #     anime = SearchResponse(
+  #       animeId=anime_id,
+  #       animeSlug=match.group(2),
+  #       animeName=name_tag.text.strip() if name_tag else 'N/A',
+  #       animeThum=anime_thum,
+  #       animeEpisode=anime_episode,
+  #       animeView=quality_tag or views,
+  #       animeStar=None
+  #     )
+  #     anime_data.append(anime.dict())
+  #   return PaginatedResponse(
+  #     status=200,
+  #     message="success",
+  #     data=anime_data,
+  #     pagination={
+  #       "view": VIEW,
+  #       "page": page,
+  #       "maxPage": max_page
+  #     }
+  #   )
+  # except Exception as e:
+  #   traceback.print_exc()
+  #   raise HTTPException(
+  #     status_code=500, 
+  #     detail=str(e)
+  #   )
 
 def genres() -> Dict:
   url = f'{KURAMANIME_URI}/properties/genre?genre_type=all&page=1'

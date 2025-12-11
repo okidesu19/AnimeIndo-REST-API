@@ -34,9 +34,11 @@ class AnimeBase(BaseModel):
   animeName: str
   animeThum: Optional[str] = None
 
+
 class AnimeViewResponse(AnimeBase):
   animeEpisode: Optional[str] = None
   animeView: Optional[str] = None
+  animeStar: Optional[str] = None
 
 class GenreResponse(BaseModel):
   genreName: str
