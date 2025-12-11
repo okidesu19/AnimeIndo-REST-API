@@ -1,8 +1,10 @@
+
 import requests
 import re
+import logging
 from bs4 import BeautifulSoup
 from fastapi import HTTPException
-from Config.config import KURAMANIME_URI, responseRq, generate_response, resolve_safelink
+from Config.config import KURAMANIME_URI, responseRq, generate_response, resolve_safelink, enhanced_session
 from Config.schemas import (
   AnimeViewResponse, GenreResponse, ScheduleResponse,
   SearchResponse, AnimeDetailResponse, StreamingResponse,
@@ -12,6 +14,11 @@ from Config.schemas import (
 import traceback
 from playwright.async_api import async_playwright
 from typing import Dict, List, Optional
+import time
+
+# Setup logging
+logger = logging.getLogger(__name__)
+
 
 def animeView(view: ViewType, order_by: OrderBy = OrderBy.LATEST, page: int = 1) -> PaginatedResponse:
   anime_data = []
@@ -23,13 +30,39 @@ def animeView(view: ViewType, order_by: OrderBy = OrderBy.LATEST, page: int = 1)
   VIEW = view_mapping.get(view, "Ongoing")
   
   url = f'{KURAMANIME_URI}/quick/{view}?order_by={order_by}&page={page}'
-  response = responseRq(url)
-  anime_data = []
   
-  if response.status_code != 200:
+  try:
+    response = responseRq(url)
+    print(response.text)
+    if response.status_code == 403:
+      logger.error(f"403 Forbidden accessing anime view endpoint: {url}")
+      raise HTTPException(
+        status_code=403,
+        detail=f"Access denied to anime view data. The source may be blocking requests from your server. View: {view}, Order: {order_by}, Page: {page}"
+      )
+    elif response.status_code != 200:
+      logger.error(f"Anime view request failed with status {response.status_code}: {url}")
+      raise HTTPException(
+        status_code=response.status_code,
+        detail=f"Failed to fetch anime view data for {view} (page {page}). Status: {response.status_code}"
+      )
+    
+    # Check if response content is valid
+    if not response.text or len(response.text.strip()) < 100:
+      logger.warning(f"Anime view response appears empty or too short: {len(response.text)} chars")
+      raise HTTPException(
+        status_code=502,
+        detail=f"Received invalid response from anime view endpoint. The source may be temporarily unavailable."
+      )
+      
+  except HTTPException:
+    # Re-raise HTTP exceptions as-is
+    raise
+  except Exception as e:
+    logger.error(f"Unexpected error in animeView function: {str(e)}")
     raise HTTPException(
-      status_code=response.status_code,
-      detail="Failed to fetch search results"
+      status_code=503,
+      detail=f"Service temporarily unavailable. Unable to fetch anime view data for {view}: {str(e)}"
     )
   
   try:
@@ -238,15 +271,43 @@ def genres() -> Dict:
       detail=str(e)
     )
 
+
 def schedule(day: Day, page: int = 1) -> PaginatedResponse:
   url = f'{KURAMANIME_URI}/schedule?scheduled_day={day}&page={page}'
-  response = responseRq(url)
   anime_data = []
   
-  if response.status_code != 200:
+  try:
+    response = responseRq(url)
+    
+    if response.status_code == 403:
+      logger.error(f"403 Forbidden accessing schedule endpoint: {url}")
+      raise HTTPException(
+        status_code=403,
+        detail=f"Access denied to schedule data. The source may be blocking requests from your server. Day: {day}, Page: {page}"
+      )
+    elif response.status_code != 200:
+      logger.error(f"Schedule request failed with status {response.status_code}: {url}")
+      raise HTTPException(
+        status_code=response.status_code,
+        detail=f"Failed to fetch schedule data for {day} (page {page}). Status: {response.status_code}"
+      )
+    
+    # Check if response content is valid
+    if not response.text or len(response.text.strip()) < 100:
+      logger.warning(f"Schedule response appears empty or too short: {len(response.text)} chars")
+      raise HTTPException(
+        status_code=502,
+        detail=f"Received invalid response from schedule endpoint. The source may be temporarily unavailable."
+      )
+      
+  except HTTPException:
+    # Re-raise HTTP exceptions as-is
+    raise
+  except Exception as e:
+    logger.error(f"Unexpected error in schedule function: {str(e)}")
     raise HTTPException(
-      status_code=response.status_code,
-      detail="Failed to fetch schedule data"
+      status_code=503,
+      detail=f"Service temporarily unavailable. Unable to fetch schedule data for {day}: {str(e)}"
     )
   
   try:

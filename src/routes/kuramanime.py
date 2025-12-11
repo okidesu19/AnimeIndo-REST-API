@@ -1,9 +1,14 @@
+
 from fastapi import APIRouter, HTTPException, Request, Query
 from src.parser.Kuramanime.kuramanime import (
     animeView, genres, schedule, search, 
     propertyGenre, animeDetail, streamingUrl
 )
 from Config.schemas import OrderBy, Day, ViewType, PaginatedResponse
+from Config.config import health_check
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
   prefix="/api/krm", 
@@ -60,6 +65,7 @@ async def detail_route(
   """Get anime details and episodes"""
   return animeDetail(animeId, animeSlug, page)
 
+
 @router.get("/anime/{animeId}/{animeSlug}/episode/{episodeId}")
 async def streaming_route(
   animeId: str,
@@ -68,6 +74,57 @@ async def streaming_route(
 ):
   """Get streaming URLs for an episode"""
   return await streamingUrl(animeId, animeSlug, episodeId)
+
+@router.get("/health")
+async def health_check_route():
+  """Health check endpoint to test connection to source"""
+  try:
+    result = health_check()
+    status_code = 200 if result["status"] == "healthy" else 503
+    return {
+      "status": status_code,
+      "message": "Health check completed",
+      "data": result
+    }
+  except Exception as e:
+    logger.error(f"Health check failed: {str(e)}")
+    return {
+      "status": 503,
+      "message": "Health check failed",
+      "data": {"error": str(e)}
+    }
+
+@router.get("/test-403")
+async def test_403_endpoint():
+  """Test endpoint to reproduce 403 error and debug"""
+  try:
+    from Config.config import KURAMANIME_URI
+    from Config.config import responseRq
+    
+    # Test direct request to schedule endpoint
+    test_url = f"{KURAMANIME_URI}/schedule?scheduled_day=Senin&page=1"
+    logger.info(f"Testing direct request to: {test_url}")
+    
+    response = responseRq(test_url)
+    
+    return {
+      "status": response.status_code,
+      "message": "Test completed",
+      "data": {
+        "url": test_url,
+        "status_code": response.status_code,
+        "headers": dict(response.headers),
+        "content_length": len(response.text),
+        "content_preview": response.text[:500] + "..." if len(response.text) > 500 else response.text
+      }
+    }
+  except Exception as e:
+    logger.error(f"403 test failed: {str(e)}")
+    return {
+      "status": 500,
+      "message": "Test failed",
+      "data": {"error": str(e)}
+    }
 
 
 
