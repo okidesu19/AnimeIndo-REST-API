@@ -1,4 +1,5 @@
 import requests
+import os
 from fastapi.responses import JSONResponse
 from typing import Union, Dict, List
 import random
@@ -6,7 +7,8 @@ import time
 import logging
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote_plus
+import os
 import json
 
 # Setup logging
@@ -65,6 +67,11 @@ LANGUAGES = [
 class EnhancedSession:
     def __init__(self):
         self.session = requests.Session()
+        self.proxies = None
+        self.scraperapi_key = os.getenv('SCRAPERAPI_KEY')
+        self.scrapingbee_key = os.getenv('SCRAPINGBEE_KEY')
+        # BrightData / Luminati style outbound proxy (explicit env var)
+        self.brightdata_proxy = os.getenv('BRIGHTDATA_PROXY')
         self._setup_session()
     
     def _setup_session(self):
@@ -96,6 +103,25 @@ class EnhancedSession:
             'Sec-Fetch-Site': 'none',
             'Cache-Control': 'no-cache'
         })
+        # Load proxy from environment if provided (e.g. PROXY_URL="http://user:pass@host:port")
+        proxy_url = os.getenv('PROXY_URL') or os.getenv('OUTBOUND_PROXY') or os.getenv('REQUESTS_PROXY')
+        if proxy_url:
+            self.proxies = {
+                'http': proxy_url,
+                'https': proxy_url
+            }
+            logger.info(f"Using outbound proxy from environment: {proxy_url}")
+        elif self.brightdata_proxy:
+            # If BRIGHTDATA_PROXY is provided, prefer it as explicit proxy
+            self.proxies = {
+                'http': self.brightdata_proxy,
+                'https': self.brightdata_proxy
+            }
+            logger.info(f"Using BrightData/explicit proxy: {self.brightdata_proxy}")
+        elif self.scraperapi_key:
+            logger.info("No outbound proxy set; ScraperAPI key detected — will use ScraperAPI as fallback.")
+        elif self.scrapingbee_key:
+            logger.info("No outbound proxy set; ScrapingBee key detected — will use ScrapingBee as fallback.")
     
     def get_random_headers(self, url=None):
         """Generate random headers for request"""
@@ -139,11 +165,27 @@ class EnhancedSession:
                 
 
 
+                request_url = url
+                # If no proxy configured, check available scraping providers in preference order
+                if not self.proxies:
+                    if self.brightdata_proxy:
+                        # brightdata_proxy should already have been set in proxies, but double-check
+                        logger.info("Routing via BrightData proxy")
+                    elif self.scraperapi_key:
+                        wrapper = f"https://api.scraperapi.com?api_key={self.scraperapi_key}&url={quote_plus(url)}&render=true"
+                        logger.info(f"Routing request via ScraperAPI for URL: {url}")
+                        request_url = wrapper
+                    elif self.scrapingbee_key:
+                        wrapper = f"https://app.scrapingbee.com/api/v1?api_key={self.scrapingbee_key}&url={quote_plus(url)}&render_js=true"
+                        logger.info(f"Routing request via ScrapingBee for URL: {url}")
+                        request_url = wrapper
+
                 response = self.session.request(
                     method=method,
-                    url=url,
+                    url=request_url,
                     headers=headers,
                     timeout=30,
+                    proxies=self.proxies,
                     **kwargs
                 )
                 
@@ -161,7 +203,12 @@ class EnhancedSession:
                 if response.status_code == 200:
                     return response
                 elif response.status_code == 403:
-                    logger.warning(f"403 Forbidden for {url} - attempt {attempt + 1}")
+                    # Log headers/body to help debugging when deployed
+                    try:
+                        snippet = response.text[:500]
+                    except Exception:
+                        snippet = '<unavailable body>'
+                    logger.warning(f"403 Forbidden for {url} - attempt {attempt + 1} - headers: {response.headers} - body_snippet: {snippet}")
                     if attempt == max_retries - 1:
                         raise requests.exceptions.HTTPError(f"403 Forbidden after {max_retries} attempts")
                 elif response.status_code == 429:
@@ -187,6 +234,9 @@ cookies = {
     "show_country": "JP", 
     "show_genre": "only_not_hentai"
 }
+
+
+
 
 def responseRq(url):
     """Enhanced request function with anti-detection"""
