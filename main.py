@@ -3,6 +3,10 @@ from src.routes.kuramanime import router as kuramanime_router
 import os
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = FastAPI(
   title="Anime Indo API",

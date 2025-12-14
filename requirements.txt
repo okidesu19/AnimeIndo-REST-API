@@ -8,3 +8,4 @@ fastapi
 fastapi[standard]
 pydantic
 urllib3
+python-dotenv
