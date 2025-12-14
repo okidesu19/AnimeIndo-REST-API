@@ -604,8 +604,86 @@ async def streamingUrl(animeId: str, animeSlug: str, episodeId: str) -> Dict:
     url = f'{KURAMANIME_URI}/anime/{animeId}/{animeSlug}/episode/{episodeId}'
     streaming_data = []
     print(url)
+    
+    fetch_method = None
+    
+    # Priority 1: Try direct proxy (PROXY_URL, WebShare, SSH tunnel, or BRIGHTDATA_PROXY)
+    if enhanced_session.proxies:
+        logger.info(f"Attempting to fetch streaming URL via proxy: {url}")
+        try:
+            response = enhanced_session.request_with_retry(url)
+            if response.status_code == 200:
+                html = response.text
+                soup = BeautifulSoup(html, 'html.parser')
+                streaming_data = _extract_streaming_data(soup, url)
+                fetch_method = "Proxy (PROXY_URL/WebShare/SSH/BrightData)"
+                if streaming_data:
+                    return generate_response(200, 'success', {
+                        "streamingSources": streaming_data,
+                        "episodeInfo": {
+                            "animeId": animeId,
+                            "animeSlug": animeSlug,
+                            "episodeId": episodeId
+                        },
+                        "fetchMethod": fetch_method
+                    })
+        except Exception as e:
+            logger.warning(f"Proxy fetch failed: {str(e)}, trying next method...")
+    
+    # Priority 2: Try ScraperAPI
+    if enhanced_session.scraperapi_key and not fetch_method:
+        logger.info(f"Attempting to fetch streaming URL via ScraperAPI: {url}")
+        try:
+            from urllib.parse import quote_plus
+            wrapper = f"https://api.scraperapi.com?api_key={enhanced_session.scraperapi_key}&url={quote_plus(url)}&render=true"
+            response = enhanced_session.request_with_retry(wrapper)
+            if response.status_code == 200:
+                html = response.text
+                soup = BeautifulSoup(html, 'html.parser')
+                streaming_data = _extract_streaming_data(soup, url)
+                fetch_method = "ScraperAPI"
+                if streaming_data:
+                    return generate_response(200, 'success', {
+                        "streamingSources": streaming_data,
+                        "episodeInfo": {
+                            "animeId": animeId,
+                            "animeSlug": animeSlug,
+                            "episodeId": episodeId
+                        },
+                        "fetchMethod": fetch_method
+                    })
+        except Exception as e:
+            logger.warning(f"ScraperAPI fetch failed: {str(e)}, trying next method...")
+    
+    # Priority 3: Try ScrapingBee
+    if enhanced_session.scrapingbee_key and not fetch_method:
+        logger.info(f"Attempting to fetch streaming URL via ScrapingBee: {url}")
+        try:
+            from urllib.parse import quote_plus
+            wrapper = f"https://app.scrapingbee.com/api/v1?api_key={enhanced_session.scrapingbee_key}&url={quote_plus(url)}&render_js=true"
+            response = enhanced_session.request_with_retry(wrapper)
+            if response.status_code == 200:
+                html = response.text
+                soup = BeautifulSoup(html, 'html.parser')
+                streaming_data = _extract_streaming_data(soup, url)
+                fetch_method = "ScrapingBee"
+                if streaming_data:
+                    return generate_response(200, 'success', {
+                        "streamingSources": streaming_data,
+                        "episodeInfo": {
+                            "animeId": animeId,
+                            "animeSlug": animeSlug,
+                            "episodeId": episodeId
+                        },
+                        "fetchMethod": fetch_method
+                    })
+        except Exception as e:
+            logger.warning(f"ScrapingBee fetch failed: {str(e)}, falling back to Playwright...")
+    
+    # Priority 4: Fallback to Playwright (local development or as last resort)
     try:
-        async with async_playwright() as p:  # Gunakan async_playwright
+        logger.info(f"Falling back to Playwright for: {url}")
+        async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
             
@@ -618,49 +696,10 @@ async def streamingUrl(animeId: str, animeSlug: str, episodeId: str) -> Dict:
             html = await page.content()
             soup = BeautifulSoup(html, 'html.parser')
             
-            # Main video player
-            video_player_div = soup.find('div', {'id': 'animeVideoPlayer'})
-            if video_player_div:
-                video_player = video_player_div.find('video', {'id': 'player'})
-                if video_player:
-                    source_tags = video_player.find_all('source')
-                    for tag in source_tags:
-                        if tag.has_attr('src'):
-                            streaming_data.append(
-                                StreamingQuality(
-                                    quality=tag.get('size', 'unknown'),
-                                    url=tag['src'],
-                                    type=tag.get('type', 'video/mp4')
-                                ).dict()
-                            )
-            
-            # Alternative servers (jika ada)
-            server_list = soup.find('ul', {'id': 'serverList'})
-            if server_list:
-                for server in server_list.find_all('li'):
-                    server_name = server.get('data-name', 'Unknown')
-                    server_data = []
-                    
-                    # Logika untuk ekstrak stream dari setiap server
-                    # Contoh sederhana:
-                    server_url = f"{url}?server={server_name}"
-                    server_data.append(
-                        StreamingQuality(
-                            quality="HD",
-                            url=server_url,
-                            type="video/mp4"
-                        ).dict()
-                    )
-                    
-                    streaming_data.append(
-                        StreamingResponse(
-                            server=server_name,
-                            videos=server_data
-                        ).dict()
-                    )
-            
+            streaming_data = _extract_streaming_data(soup, url)
             await browser.close()
             
+            fetch_method = "Playwright"
             if streaming_data:
                 return generate_response(200, 'success', {
                     "streamingSources": streaming_data,
@@ -668,7 +707,8 @@ async def streamingUrl(animeId: str, animeSlug: str, episodeId: str) -> Dict:
                         "animeId": animeId,
                         "animeSlug": animeSlug,
                         "episodeId": episodeId
-                    }
+                    },
+                    "fetchMethod": fetch_method
                 })
             return generate_response(404, 'No video sources found', {})
             
@@ -676,4 +716,51 @@ async def streamingUrl(animeId: str, animeSlug: str, episodeId: str) -> Dict:
         traceback.print_exc()
         if 'browser' in locals():
             await browser.close()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"All fetch methods failed. Last error: {str(e)}")
+
+def _extract_streaming_data(soup: BeautifulSoup, url: str) -> List:
+    """Helper function to extract streaming data from BeautifulSoup object."""
+    streaming_data = []
+    
+    # Main video player
+    video_player_div = soup.find('div', {'id': 'animeVideoPlayer'})
+    if video_player_div:
+        video_player = video_player_div.find('video', {'id': 'player'})
+        if video_player:
+            source_tags = video_player.find_all('source')
+            for tag in source_tags:
+                if tag.has_attr('src'):
+                    streaming_data.append(
+                        StreamingQuality(
+                            quality=tag.get('size', 'unknown'),
+                            url=tag['src'],
+                            type=tag.get('type', 'video/mp4')
+                        ).dict()
+                    )
+    
+    # Alternative servers (jika ada)
+    server_list = soup.find('ul', {'id': 'serverList'})
+    if server_list:
+        for server in server_list.find_all('li'):
+            server_name = server.get('data-name', 'Unknown')
+            server_data = []
+            
+            # Logika untuk ekstrak stream dari setiap server
+            # Contoh sederhana:
+            server_url = f"{url}?server={server_name}"
+            server_data.append(
+                StreamingQuality(
+                    quality="HD",
+                    url=server_url,
+                    type="video/mp4"
+                ).dict()
+            )
+            
+            streaming_data.append(
+                StreamingResponse(
+                    server=server_name,
+                    videos=server_data
+                ).dict()
+            )
+    
+    return streaming_data

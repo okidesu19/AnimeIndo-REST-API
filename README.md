@@ -95,9 +95,116 @@ export SCRAPINGBEE_KEY="your_scrapingbee_key"
 Prioritas pemakaian pada server:
 
 1. `PROXY_URL` / explicit proxy vars (paling prioritas)
-2. `BRIGHTDATA_PROXY`
-3. `SCRAPERAPI_KEY` (ScraperAPI)
-4. `SCRAPINGBEE_KEY` (ScrapingBee)
+2. `SSH_HOST` + `SSH_USER` + `SSH_PASSWORD` (SSH tunnel sebagai proxy fallback)
+3. `BRIGHTDATA_PROXY`
+4. `SCRAPERAPI_KEY` (ScraperAPI)
+5. `SCRAPINGBEE_KEY` (ScrapingBee)
+6. Playwright (fallback terakhir, development only)
+
+**SSH Tunnel Configuration:**
+
+Jika Anda memiliki akun SSH server, Anda bisa menggunakannya sebagai proxy via SSH tunnel:
+
+```bash
+export SSH_HOST="your.ssh.server"
+export SSH_USER="username"
+export SSH_PASSWORD="password"
+# atau gunakan SSH key (ubah code jika diperlukan)
+```
+Prioritas pemakaian pada server:
+
+1. `PROXY_URL` / explicit proxy vars (paling prioritas)
+2. `WEBSHARE_API_KEY` + `WEBSHARE_API_PASSWORD` (WebShare free proxy)
+3. `SSH_HOST` + `SSH_USER` + `SSH_PASSWORD` (SSH tunnel - LionSSH, FastSSH, dll)
+4. `BRIGHTDATA_PROXY`
+5. `SCRAPERAPI_KEY` (ScraperAPI)
+6. `SCRAPINGBEE_KEY` (ScrapingBee)
+7. Playwright (fallback terakhir, development only)
+
+### **Free SSH Services Setup:**
+
+#### **1. LionSSH (lionssh.com)**
+- Daftar gratis di https://lionssh.com
+- Dapatkan akun SSH: host, username, password
+- Set di `.env`:
+```bash
+SSH_HOST=your-lionssh-host.com
+SSH_USER=your_username
+SSH_PASSWORD=your_password
+```
+
+#### **2. FastSSH (fastssh.com)**
+- Daftar gratis di https://fastssh.com
+- Dapatkan akun SSH: host, username, password
+- Set di `.env`:
+```bash
+SSH_HOST=your-fastssh-host.com
+SSH_USER=your_username
+SSH_PASSWORD=your_password
+```
+
+### **Free Proxy Service Setup:**
+
+#### **3. WebShare (webshare.io)**
+- Gratis 10 proxy per bulan di https://www.webshare.io/free-proxy
+- Daftar, ambil API key dan password dari dashboard
+- Set di `.env`:
+```bash
+WEBSHARE_API_KEY=your_api_key
+WEBSHARE_API_PASSWORD=your_api_password
+```
+
+**Contoh `.env` lengkap dengan semua opsi:**
+
+```
+# Opsi 1: Direct proxy (jika punya)
+PROXY_URL=http://user:pass@proxy-host:port
+
+# Opsi 2: WebShare free proxy (gratis tapi limited)
+WEBSHARE_API_KEY=your_webshare_api_key
+WEBSHARE_API_PASSWORD=your_webshare_password
+
+# Opsi 3: SSH tunnel (LionSSH atau FastSSH gratis)
+SSH_HOST=your-ssh-host.com
+SSH_USER=your_ssh_username
+SSH_PASSWORD=your_ssh_password
+
+# Opsi 4: BrightData proxy
+BRIGHTDATA_PROXY=http://username:password@brd.proxy.example:port
+
+# Opsi 5: ScraperAPI
+SCRAPERAPI_KEY=your_scraperapi_key
+
+# Opsi 6: ScrapingBee (Anda sudah punya ini)
+SCRAPINGBEE_KEY=29QJ0HGZXCPTTWDLFW2PNRVH6TUUIH8TI048LGAQ659OEIXQ70O7KG7YYK2A3VNP13PNMOEKJT7VJ2M0
+```
+
+**Rekomendasi:**
+- **Terbaik untuk free tier:** WebShare (simple, cepat setup, 10 proxy gratis/bulan)
+- **Alternatif terbaik:** SSH tunnel dari LionSSH/FastSSH (unlimited, reliable)
+- **Production:** Gunakan SCRAPERAPI_KEY atau SCRAPINGBEE_KEY (tested, reliable)
+
+Contoh file helper sudah disediakan di `scripts/setup_scraper_env.sh` untuk panduan cepat.
+
+Contoh `.env`:
+
+```
+SSH_HOST=my-server.com
+SSH_USER=ubuntu
+SSH_PASSWORD=my_secure_password
+```
+
+**atau Lengkap dengan semua opsi:**
+
+```
+PROXY_URL=http://user:pass@proxy-host:port
+BRIGHTDATA_PROXY=http://username:password@brd.proxy.example:port
+SCRAPERAPI_KEY=your_scraperapi_key
+SCRAPINGBEE_KEY=your_scrapingbee_key
+SSH_HOST=your.ssh.server
+SSH_USER=username
+SSH_PASSWORD=password
+```
 
 Contoh file helper sudah disediakan di `scripts/setup_scraper_env.sh` untuk panduan cepat.
 
