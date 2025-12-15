@@ -144,6 +144,18 @@ class EnhancedSession:
             'Cache-Control': 'no-cache'
         })
         
+        # DEBUG: Log all detected providers
+        logger.info(f"=== PROXY SETUP DEBUG ===")
+        logger.info(f"PROXY_URL: {bool(os.getenv('PROXY_URL'))}")
+        logger.info(f"OUTBOUND_PROXY: {bool(os.getenv('OUTBOUND_PROXY'))}")
+        logger.info(f"REQUESTS_PROXY: {bool(os.getenv('REQUESTS_PROXY'))}")
+        logger.info(f"WEBSHARE_API_KEY: {bool(self.webshare_api_key)}")
+        logger.info(f"SSH_HOST: {bool(self.ssh_host)}")
+        logger.info(f"BRIGHTDATA_PROXY: {bool(self.brightdata_proxy)}")
+        logger.info(f"SCRAPERAPI_KEY: {bool(self.scraperapi_key)}")
+        logger.info(f"SCRAPINGBEE_KEY: {bool(self.scrapingbee_key)}")
+        logger.info(f"========================")
+        
         # Setup proxy priority: 1=PROXY_URL, 2=WebShare, 3=SSH tunnel, 4=BRIGHTDATA_PROXY
         proxy_url = os.getenv('PROXY_URL') or os.getenv('OUTBOUND_PROXY') or os.getenv('REQUESTS_PROXY')
         if proxy_url:
@@ -151,7 +163,7 @@ class EnhancedSession:
                 'http': proxy_url,
                 'https': proxy_url
             }
-            logger.info(f"Using outbound proxy from environment: {proxy_url}")
+            logger.info(f"✓ Using outbound proxy from environment: {proxy_url[:30]}...")
         elif self.webshare_api_key:
             # WebShare proxy (webshare.io) - free proxy service
             webshare_proxy = f"http://{self.webshare_api_key}:{self.webshare_api_password}@proxy.webshare.io:80"
@@ -159,7 +171,7 @@ class EnhancedSession:
                 'http': webshare_proxy,
                 'https': webshare_proxy
             }
-            logger.info(f"Using WebShare proxy: proxy.webshare.io")
+            logger.info(f"✓ Using WebShare proxy: proxy.webshare.io")
         elif self.ssh_host:
             # Try SSH tunnel as fallback proxy (LionSSH, FastSSH, or any SSH provider)
             ssh_proxy = self._setup_ssh_tunnel()
@@ -168,17 +180,17 @@ class EnhancedSession:
                     'http': ssh_proxy,
                     'https': ssh_proxy
                 }
-                logger.info(f"Using SSH tunnel proxy: {ssh_proxy}")
+                logger.info(f"✓ Using SSH tunnel proxy: {ssh_proxy}")
         elif self.brightdata_proxy:
             self.proxies = {
                 'http': self.brightdata_proxy,
                 'https': self.brightdata_proxy
             }
-            logger.info(f"Using BrightData proxy: {self.brightdata_proxy}")
+            logger.info(f"✓ Using BrightData proxy: {self.brightdata_proxy[:30]}...")
         elif self.scraperapi_key:
-            logger.info("No outbound proxy set; ScraperAPI key detected — will use ScraperAPI as fallback.")
+            logger.info("✓ ScraperAPI key detected — will use ScraperAPI as fallback.")
         elif self.scrapingbee_key:
-            logger.info("No outbound proxy set; ScrapingBee key detected — will use ScrapingBee as fallback.")
+            logger.info("✓ ScrapingBee key detected — will use ScrapingBee as fallback.")
     
     def get_random_headers(self, url=None):
         """Generate random headers for request"""

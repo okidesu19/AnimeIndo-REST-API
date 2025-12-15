@@ -609,6 +609,15 @@ async def streamingUrl(animeId: str, animeSlug: str, episodeId: str) -> Dict:
     fetch_method = None
     is_serverless = os.getenv('VERCEL') or os.getenv('RAILWAY_ENVIRONMENT') or os.getenv('HEROKU_APP_NAME')
     
+    # DEBUG: Log what providers are available
+    logger.info(f"streamingUrl: Checking available providers...")
+    logger.info(f"  - Proxies available: {bool(enhanced_session.proxies)}")
+    logger.info(f"  - ScraperAPI key: {bool(enhanced_session.scraperapi_key)}")
+    logger.info(f"  - ScrapingBee key: {bool(enhanced_session.scrapingbee_key)}")
+    logger.info(f"  - WebShare key: {bool(enhanced_session.webshare_api_key)}")
+    logger.info(f"  - SSH config: {bool(enhanced_session.ssh_host)}")
+    logger.info(f"  - BrightData proxy: {bool(enhanced_session.brightdata_proxy)}")
+    
     # Priority 1: Try direct proxy (PROXY_URL, WebShare, SSH tunnel, or BRIGHTDATA_PROXY)
     if enhanced_session.proxies:
         logger.info(f"Attempting to fetch streaming URL via proxy: {url}")
@@ -687,9 +696,19 @@ async def streamingUrl(animeId: str, animeSlug: str, episodeId: str) -> Dict:
         except Exception as e:
             logger.warning(f"ScrapingBee fetch failed: {str(e)}, falling back...")
     
+    # Check if ANY provider is configured
+    has_any_provider = (
+        enhanced_session.proxies or 
+        enhanced_session.scraperapi_key or 
+        enhanced_session.scrapingbee_key or
+        enhanced_session.webshare_api_key or
+        enhanced_session.ssh_host or
+        enhanced_session.brightdata_proxy
+    )
+    
     # Priority 4: Only use Playwright in LOCAL development, NOT in serverless/production
-    if is_serverless:
-        logger.error(f"✗ Running in serverless environment (Vercel/Railway/Heroku) but no proxy/API key configured")
+    if is_serverless and not has_any_provider:
+        logger.error(f"✗ Running in serverless environment but no proxy/API key configured")
         error_msg = (
             "Streaming URL fetch failed. No proxy or API key configured for serverless environment. "
             "Please configure one of: PROXY_URL, WEBSHARE_API_KEY, SSH_HOST+SSH_USER+SSH_PASSWORD, "
