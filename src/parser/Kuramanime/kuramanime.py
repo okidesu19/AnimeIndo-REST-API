@@ -2,6 +2,7 @@
 import requests
 import re
 import logging
+import os
 from bs4 import BeautifulSoup
 from fastapi import HTTPException
 from Config.config import KURAMANIME_URI, responseRq, generate_response, resolve_safelink, enhanced_session
@@ -606,6 +607,7 @@ async def streamingUrl(animeId: str, animeSlug: str, episodeId: str) -> Dict:
     print(url)
     
     fetch_method = None
+    is_serverless = os.getenv('VERCEL') or os.getenv('RAILWAY_ENVIRONMENT') or os.getenv('HEROKU_APP_NAME')
     
     # Priority 1: Try direct proxy (PROXY_URL, WebShare, SSH tunnel, or BRIGHTDATA_PROXY)
     if enhanced_session.proxies:
@@ -618,6 +620,7 @@ async def streamingUrl(animeId: str, animeSlug: str, episodeId: str) -> Dict:
                 streaming_data = _extract_streaming_data(soup, url)
                 fetch_method = "Proxy (PROXY_URL/WebShare/SSH/BrightData)"
                 if streaming_data:
+                    logger.info(f"✓ Found {len(streaming_data)} sources via proxy")
                     return generate_response(200, 'success', {
                         "streamingSources": streaming_data,
                         "episodeInfo": {
@@ -627,6 +630,8 @@ async def streamingUrl(animeId: str, animeSlug: str, episodeId: str) -> Dict:
                         },
                         "fetchMethod": fetch_method
                     })
+                else:
+                    logger.warning(f"✗ Proxy returned 200 but no streaming data extracted from HTML")
         except Exception as e:
             logger.warning(f"Proxy fetch failed: {str(e)}, trying next method...")
     
@@ -643,6 +648,7 @@ async def streamingUrl(animeId: str, animeSlug: str, episodeId: str) -> Dict:
                 streaming_data = _extract_streaming_data(soup, url)
                 fetch_method = "ScraperAPI"
                 if streaming_data:
+                    logger.info(f"✓ Found {len(streaming_data)} sources via ScraperAPI")
                     return generate_response(200, 'success', {
                         "streamingSources": streaming_data,
                         "episodeInfo": {
@@ -668,6 +674,7 @@ async def streamingUrl(animeId: str, animeSlug: str, episodeId: str) -> Dict:
                 streaming_data = _extract_streaming_data(soup, url)
                 fetch_method = "ScrapingBee"
                 if streaming_data:
+                    logger.info(f"✓ Found {len(streaming_data)} sources via ScrapingBee")
                     return generate_response(200, 'success', {
                         "streamingSources": streaming_data,
                         "episodeInfo": {
@@ -678,20 +685,34 @@ async def streamingUrl(animeId: str, animeSlug: str, episodeId: str) -> Dict:
                         "fetchMethod": fetch_method
                     })
         except Exception as e:
-            logger.warning(f"ScrapingBee fetch failed: {str(e)}, falling back to Playwright...")
+            logger.warning(f"ScrapingBee fetch failed: {str(e)}, falling back...")
     
-    # Priority 4: Fallback to Playwright (local development or as last resort)
+    # Priority 4: Only use Playwright in LOCAL development, NOT in serverless/production
+    if is_serverless:
+        logger.error(f"✗ Running in serverless environment (Vercel/Railway/Heroku) but no proxy/API key configured")
+        error_msg = (
+            "Streaming URL fetch failed. No proxy or API key configured for serverless environment. "
+            "Please configure one of: PROXY_URL, WEBSHARE_API_KEY, SSH_HOST+SSH_USER+SSH_PASSWORD, "
+            "BRIGHTDATA_PROXY, SCRAPERAPI_KEY, or SCRAPINGBEE_KEY. "
+            f"For more info, see: https://github.com/okidesu19/AnimeIndo-REST-API#proxy--scraper-fallback-deployment"
+        )
+        raise HTTPException(status_code=503, detail=error_msg)
+    
+    # LOCAL DEVELOPMENT ONLY: Fallback to Playwright (not recommended for production)
+    logger.info(f"LOCAL DEV: Falling back to Playwright for: {url}")
     try:
-        logger.info(f"Falling back to Playwright for: {url}")
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
             
-            # Navigasi ke URL dengan timeout yang wajar
-            await page.goto(url, wait_until="networkidle", timeout=30000)
+            # Navigasi ke URL dengan timeout lebih pendek
+            await page.goto(url, wait_until="domcontentloaded", timeout=15000)
             
-            # Tunggu elemen video player muncul (jika diperlukan)
-            await page.wait_for_selector('#animeVideoPlayer', timeout=10000)
+            # Tunggu elemen video player muncul
+            try:
+                await page.wait_for_selector('#animeVideoPlayer', timeout=5000)
+            except:
+                logger.warning("Video player selector not found, proceeding anyway")
             
             html = await page.content()
             soup = BeautifulSoup(html, 'html.parser')
@@ -701,6 +722,7 @@ async def streamingUrl(animeId: str, animeSlug: str, episodeId: str) -> Dict:
             
             fetch_method = "Playwright"
             if streaming_data:
+                logger.info(f"✓ Found {len(streaming_data)} sources via Playwright")
                 return generate_response(200, 'success', {
                     "streamingSources": streaming_data,
                     "episodeInfo": {
@@ -716,13 +738,16 @@ async def streamingUrl(animeId: str, animeSlug: str, episodeId: str) -> Dict:
         traceback.print_exc()
         if 'browser' in locals():
             await browser.close()
-        raise HTTPException(status_code=500, detail=f"All fetch methods failed. Last error: {str(e)}")
+        logger.error(f"Playwright fetch failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch streaming URL. Error: {str(e)}")
 
 def _extract_streaming_data(soup: BeautifulSoup, url: str) -> List:
-    """Helper function to extract streaming data from BeautifulSoup object."""
+    """Helper function to extract streaming data from BeautifulSoup object with multiple fallbacks."""
     streaming_data = []
     
-    # Main video player
+    # Try multiple selector approaches to find video sources
+    
+    # Approach 1: Standard video player with source tags
     video_player_div = soup.find('div', {'id': 'animeVideoPlayer'})
     if video_player_div:
         video_player = video_player_div.find('video', {'id': 'player'})
@@ -738,29 +763,58 @@ def _extract_streaming_data(soup: BeautifulSoup, url: str) -> List:
                         ).dict()
                     )
     
-    # Alternative servers (jika ada)
+    # Approach 2: Look for iframe with video src
+    if not streaming_data:
+        iframes = soup.find_all('iframe')
+        for iframe in iframes:
+            src = iframe.get('src', '')
+            if src and ('v8' in src or 'anime' in src or 'video' in src.lower()):
+                streaming_data.append(
+                    StreamingQuality(
+                        quality="Unknown",
+                        url=src,
+                        type="video/mp4"
+                    ).dict()
+                )
+                break
+    
+    # Approach 3: Look for data-src or any src attribute in video-related tags
+    if not streaming_data:
+        video_tags = soup.find_all(['video', 'source'])
+        for tag in video_tags:
+            src = tag.get('src') or tag.get('data-src')
+            if src:
+                streaming_data.append(
+                    StreamingQuality(
+                        quality=tag.get('quality', 'Unknown'),
+                        url=src,
+                        type=tag.get('type', 'video/mp4')
+                    ).dict()
+                )
+    
+    # Approach 4: Look for server list and extract URLs
     server_list = soup.find('ul', {'id': 'serverList'})
-    if server_list:
+    if server_list and not streaming_data:
         for server in server_list.find_all('li'):
             server_name = server.get('data-name', 'Unknown')
-            server_data = []
-            
-            # Logika untuk ekstrak stream dari setiap server
-            # Contoh sederhana:
-            server_url = f"{url}?server={server_name}"
-            server_data.append(
-                StreamingQuality(
-                    quality="HD",
-                    url=server_url,
-                    type="video/mp4"
-                ).dict()
-            )
-            
-            streaming_data.append(
-                StreamingResponse(
-                    server=server_name,
-                    videos=server_data
-                ).dict()
-            )
+            server_url = server.get('data-url') or server.find('a', href=True)
+            if server_url:
+                streaming_data.append(
+                    StreamingResponse(
+                        server=server_name,
+                        videos=[StreamingQuality(
+                            quality="HD",
+                            url=server_url if isinstance(server_url, str) else server_url.get('href'),
+                            type="video/mp4"
+                        ).dict()]
+                    ).dict()
+                )
+    
+    # Log what we found for debugging
+    logger.info(f"_extract_streaming_data found {len(streaming_data)} sources from {url}")
+    if not streaming_data:
+        # Log first 500 chars of HTML for debugging
+        html_snippet = str(soup)[:500]
+        logger.warning(f"No streaming data found. HTML snippet: {html_snippet}")
     
     return streaming_data
