@@ -38,6 +38,80 @@ playwright install-deps
 fastapi dev main.py
 ```
 
+## 🐳 Docker (Playwright) — recommended for Railway/Vercel with Playwright
+
+Jika Anda butuh menjalankan Playwright di environment cloud seperti Railway, gunakan container yang sudah menginstal browser dan dependensi sistem. Saya sudah menambahkan `Dockerfile.playwright` di repository.
+
+Build image dan jalankan:
+
+```bash
+docker build -f Dockerfile.playwright -t animeindo-playwright:latest .
+docker run --rm -p 8000:8000 \
+  -e TYPE_GET_STREAMING=PLAYWRIGHT \
+  -e SCRAPINGBEE_KEY=your_key_here \
+  -e PROXY_URL=http://user:pass@host:port \
+  animeindo-playwright:latest
+```
+
+Catatan:
+- Set `TYPE_GET_STREAMING=PLAYWRIGHT` jika Anda ingin memaksa penggunaan Playwright.
+- Jika Anda men-deploy ke Railway menggunakan Dockerfile ini, pastikan menambahkan environment variables yang diperlukan di project settings.
+- Playwright membutuhkan lebih banyak sumber daya; gunakan plan/VPS yang sesuai.
+
+### **Deploy ke Railway dengan Playwright**
+
+1. Push repository Anda ke GitHub
+2. Buka [railway.app](https://railway.app), login dengan GitHub
+3. Click "New Project" → "Deploy from GitHub repo"
+4. Pilih repository `AnimeIndo-REST-API`
+5. Railway akan otomatis mendeteksi `Dockerfile.playwright`:
+   - Go to project → Variables
+   - Tambah: `TYPE_GET_STREAMING=PLAYWRIGHT`
+   - Tambah: `SCRAPINGBEE_KEY=your_key_here` (atau provider lain)
+6. Click "Deploy"
+
+Atau dari CLI:
+
+```bash
+# Install Railway CLI
+npm install -g @railway/cli
+
+# Login
+railway login
+
+# Create project di Railway
+railway init
+
+# Set env vars
+railway variables set TYPE_GET_STREAMING=PLAYWRIGHT
+railway variables set SCRAPINGBEE_KEY=your_key_here
+
+# Deploy
+railway up
+```
+
+### **Testing Lokal dengan Docker Compose**
+
+Test Playwright setup lokal sebelum deploy ke Railway:
+
+```bash
+# Build dan jalankan dengan docker-compose
+docker-compose up -d api-playwright
+
+# Check logs
+docker-compose logs -f api-playwright
+
+# Test endpoint
+curl http://localhost:8000/docs
+
+# Stop
+docker-compose down
+```
+
+File `docker-compose.yml` sudah disediakan dengan dua service:
+- `api-playwright`: Playwright dengan `TYPE_GET_STREAMING=PLAYWRIGHT`
+- `api-proxy`: Alternatif dengan proxy fallback
+
 ## 🚀 API Endpoints
 
 | Endpoint | Method | Description |

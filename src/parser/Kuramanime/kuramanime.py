@@ -617,6 +617,134 @@ async def streamingUrl(animeId: str, animeSlug: str, episodeId: str) -> Dict:
     logger.info(f"  - WebShare key: {bool(enhanced_session.webshare_api_key)}")
     logger.info(f"  - SSH config: {bool(enhanced_session.ssh_host)}")
     logger.info(f"  - BrightData proxy: {bool(enhanced_session.brightdata_proxy)}")
+    # Respect explicit TYPE_GET_STREAMING if set in environment/config
+    forced = (getattr(enhanced_session, 'type_get_streaming', None) or os.getenv('TYPE_GET_STREAMING') or '').strip().lower()
+    if forced:
+      logger.info(f"TYPE_GET_STREAMING forced to: {forced}")
+      # Map a few common synonyms
+      if forced in ('proxy', 'proxies', 'proxy_url'):
+        if not enhanced_session.proxies:
+          raise HTTPException(status_code=400, detail='TYPE_GET_STREAMING=PROXY requested but no PROXY_URL/OUTBOUND_PROXY configured')
+        try:
+          response = enhanced_session.request_with_retry(url)
+          if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            streaming_data = _extract_streaming_data(soup, url)
+            if streaming_data:
+              return generate_response(200, 'success', {"streamingSources": streaming_data, "episodeInfo": {"animeId": animeId, "animeSlug": animeSlug, "episodeId": episodeId}, "fetchMethod": 'Proxy (forced)'} )
+            return generate_response(404, 'No video sources found', {})
+        except Exception as e:
+          logger.error(f"Forced PROXY fetch failed: {e}")
+          raise HTTPException(status_code=500, detail=f"Forced PROXY failed: {e}")
+
+      if forced in ('scraperapi', 'scraper_api'):
+        if not enhanced_session.scraperapi_key:
+          raise HTTPException(status_code=400, detail='TYPE_GET_STREAMING=SCRAPERAPI requested but SCRAPERAPI_KEY not configured')
+        try:
+          from urllib.parse import quote_plus
+          wrapper = f"https://api.scraperapi.com?api_key={enhanced_session.scraperapi_key}&url={quote_plus(url)}&render=true"
+          response = enhanced_session.request_with_retry(wrapper)
+          if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            streaming_data = _extract_streaming_data(soup, url)
+            if streaming_data:
+              return generate_response(200, 'success', {"streamingSources": streaming_data, "episodeInfo": {"animeId": animeId, "animeSlug": animeSlug, "episodeId": episodeId}, "fetchMethod": 'ScraperAPI (forced)'} )
+            return generate_response(404, 'No video sources found', {})
+        except Exception as e:
+          logger.error(f"Forced ScraperAPI fetch failed: {e}")
+          raise HTTPException(status_code=500, detail=f"Forced SCRAPERAPI failed: {e}")
+
+      if forced in ('scrapingbee', 'scraping_bee'):
+        if not enhanced_session.scrapingbee_key:
+          raise HTTPException(status_code=400, detail='TYPE_GET_STREAMING=SCRAPINGBEE requested but SCRAPINGBEE_KEY not configured')
+        try:
+          from urllib.parse import quote_plus
+          wrapper = f"https://app.scrapingbee.com/api/v1?api_key={enhanced_session.scrapingbee_key}&url={quote_plus(url)}&render_js=true"
+          response = enhanced_session.request_with_retry(wrapper)
+          if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            streaming_data = _extract_streaming_data(soup, url)
+            if streaming_data:
+              return generate_response(200, 'success', {"streamingSources": streaming_data, "episodeInfo": {"animeId": animeId, "animeSlug": animeSlug, "episodeId": episodeId}, "fetchMethod": 'ScrapingBee (forced)'} )
+            return generate_response(404, 'No video sources found', {})
+        except Exception as e:
+          logger.error(f"Forced ScrapingBee fetch failed: {e}")
+          raise HTTPException(status_code=500, detail=f"Forced SCRAPINGBEE failed: {e}")
+
+      if forced in ('webshare', 'webshare_io'):
+        if not enhanced_session.webshare_api_key:
+          raise HTTPException(status_code=400, detail='TYPE_GET_STREAMING=WEBSHARE requested but WEBSHARE_API_KEY not configured')
+        # Temporarily ensure proxies point to webshare
+        prev = enhanced_session.proxies
+        try:
+          webshare_proxy = f"http://{enhanced_session.webshare_api_key}:{enhanced_session.webshare_api_password}@proxy.webshare.io:80"
+          enhanced_session.proxies = {'http': webshare_proxy, 'https': webshare_proxy}
+          response = enhanced_session.request_with_retry(url)
+          if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            streaming_data = _extract_streaming_data(soup, url)
+            if streaming_data:
+              return generate_response(200, 'success', {"streamingSources": streaming_data, "episodeInfo": {"animeId": animeId, "animeSlug": animeSlug, "episodeId": episodeId}, "fetchMethod": 'WebShare (forced)'} )
+            return generate_response(404, 'No video sources found', {})
+        except Exception as e:
+          logger.error(f"Forced WebShare fetch failed: {e}")
+          raise HTTPException(status_code=500, detail=f"Forced WEBSHARE failed: {e}")
+        finally:
+          enhanced_session.proxies = prev
+
+      if forced in ('ssh', 'ssh_tunnel'):
+        if not enhanced_session.ssh_host:
+          raise HTTPException(status_code=400, detail='TYPE_GET_STREAMING=SSH requested but SSH_HOST/SSH_USER not configured')
+        # Ensure ssh tunnel exists and proxies configured
+        prev = enhanced_session.proxies
+        try:
+          ssh_proxy = None
+          if not getattr(enhanced_session, 'ssh_tunnel', None):
+            ssh_proxy = enhanced_session._setup_ssh_tunnel()
+          if not enhanced_session.proxies and ssh_proxy:
+            enhanced_session.proxies = {'http': ssh_proxy, 'https': ssh_proxy}
+          if not enhanced_session.proxies:
+            raise HTTPException(status_code=500, detail='Failed to establish SSH tunnel proxy')
+          response = enhanced_session.request_with_retry(url)
+          if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            streaming_data = _extract_streaming_data(soup, url)
+            if streaming_data:
+              return generate_response(200, 'success', {"streamingSources": streaming_data, "episodeInfo": {"animeId": animeId, "animeSlug": animeSlug, "episodeId": episodeId}, "fetchMethod": 'SSH (forced)'} )
+            return generate_response(404, 'No video sources found', {})
+        except HTTPException:
+          raise
+        except Exception as e:
+          logger.error(f"Forced SSH fetch failed: {e}")
+          raise HTTPException(status_code=500, detail=f"Forced SSH failed: {e}")
+        finally:
+          enhanced_session.proxies = prev
+
+      if forced in ('brightdata', 'bright_data', 'brightdata_proxy'):
+        if not enhanced_session.brightdata_proxy:
+          raise HTTPException(status_code=400, detail='TYPE_GET_STREAMING=BRIGHTDATA requested but BRIGHTDATA_PROXY not configured')
+        prev = enhanced_session.proxies
+        try:
+          enhanced_session.proxies = {'http': enhanced_session.brightdata_proxy, 'https': enhanced_session.brightdata_proxy}
+          response = enhanced_session.request_with_retry(url)
+          if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            streaming_data = _extract_streaming_data(soup, url)
+            if streaming_data:
+              return generate_response(200, 'success', {"streamingSources": streaming_data, "episodeInfo": {"animeId": animeId, "animeSlug": animeSlug, "episodeId": episodeId}, "fetchMethod": 'BrightData (forced)'} )
+            return generate_response(404, 'No video sources found', {})
+        except Exception as e:
+          logger.error(f"Forced BrightData fetch failed: {e}")
+          raise HTTPException(status_code=500, detail=f"Forced BRIGHTDATA failed: {e}")
+        finally:
+          enhanced_session.proxies = prev
+
+      if forced in ('playwright', 'browser'):
+        # Allow Playwright only if explicitly forced and not in serverless without container
+        if is_serverless:
+          logger.error('Playwright forced in serverless environment — not recommended')
+        # Continue to the existing Playwright block below
+        logger.info('Proceeding to Playwright fallback (forced)')
     
     # Priority 1: Try direct proxy (PROXY_URL, WebShare, SSH tunnel, or BRIGHTDATA_PROXY)
     if enhanced_session.proxies:

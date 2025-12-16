@@ -77,6 +77,9 @@ class EnhancedSession:
         self.proxies = None
         self.scraperapi_key = os.getenv('SCRAPERAPI_KEY')
         self.scrapingbee_key = os.getenv('SCRAPINGBEE_KEY')
+        # Optional explicit provider selector for streaming fetches
+        # Values: PROXY, SCRAPERAPI, SCRAPINGBEE, WEBSHARE, SSH, BRIGHTDATA, PLAYWRIGHT
+        self.type_get_streaming = (os.getenv('TYPE_GET_STREAMING') or '').strip()
         # BrightData / Luminati style outbound proxy (explicit env var)
         self.brightdata_proxy = os.getenv('BRIGHTDATA_PROXY')
         # SSH tunnel config (LionSSH, FastSSH, or any SSH provider)
@@ -154,6 +157,7 @@ class EnhancedSession:
         logger.info(f"BRIGHTDATA_PROXY: {bool(self.brightdata_proxy)}")
         logger.info(f"SCRAPERAPI_KEY: {bool(self.scraperapi_key)}")
         logger.info(f"SCRAPINGBEE_KEY: {bool(self.scrapingbee_key)}")
+        logger.info(f"TYPE_GET_STREAMING: {bool(self.type_get_streaming)} ({self.type_get_streaming})")
         logger.info(f"========================")
         
         # Setup proxy priority: 1=PROXY_URL, 2=WebShare, 3=SSH tunnel, 4=BRIGHTDATA_PROXY

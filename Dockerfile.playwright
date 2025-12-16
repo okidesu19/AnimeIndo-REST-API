@@ -1,0 +1,49 @@
+# Dockerfile to run the FastAPI app with Playwright browser installed
+# Based on official Python image + Playwright dependencies
+
+FROM python:3.11-slim
+
+# Install system dependencies required by Playwright
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libnss3 \
+    libgconf-2-4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libx11-xcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    libpangocairo-1.0-0 \
+    fonts-liberation \
+    libxss1 \
+    wget \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy project files
+COPY . /app
+
+# Install requirements
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install Playwright browsers WITH system dependencies
+RUN pip install --no-cache-dir playwright && \
+    python -m playwright install chromium && \
+    python -m playwright install-deps chromium
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:8000/docs', timeout=5)" || exit 1
+
+# Default command (uvicorn with workers for Railway)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
