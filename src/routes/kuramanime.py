@@ -5,7 +5,7 @@ from src.parser.Kuramanime.kuramanime import (
     get_property_genre, get_anime_detail, get_streaming_url
 )
 
-from Config.schemas import OrderBy, Day, ViewType, PaginatedResponse
+from Config.schemas import OrderBy, Day, ViewType, PaginatedResponse, RequestMethod
 from Config.config import health_check
 import logging
 
@@ -22,14 +22,14 @@ async def anime_view_route(
   view: ViewType, 
   order_by: OrderBy = Query(OrderBy.LATEST, description="Sorting order"), 
   page: int = Query(1, gt=0, description="Page number"),
-  request_method: str = Query("requests", regex="^(requests|playwright)$")
+  request_method: RequestMethod = Query(RequestMethod.REQUESTS, description="Request method")
 ):
   """Get anime list by view type (ongoing/finished). Use ?request=playwright for browser mode."""
   return await get_anime_view(view.value, order_by.value, page, request_method)
 
 @router.get("/genres")
 async def genres_route(
-    request_method: str = Query("requests", regex="^(requests|playwright)$")
+    request_method: RequestMethod = Query(RequestMethod.REQUESTS, description="Request method")
 ):
   """Get list of all available genres. Use ?request=playwright for browser mode."""
   return await get_genres(request_method)
@@ -38,7 +38,7 @@ async def genres_route(
 async def schedule_route(
   day: Day,
   page: int = Query(1, gt=0, description="Page number"),
-  request_method: str = Query("requests", regex="^(requests|playwright)$")
+  request_method: RequestMethod = Query(RequestMethod.REQUESTS, description="Request method")
 ):
   """Get anime schedule by day. Use ?request=playwright for browser mode."""
   return await get_schedule(day.value, page, request_method)
@@ -48,7 +48,7 @@ async def search_route(
   query: str = Query(..., min_length=1, description="Search query"),
   order_by: OrderBy = Query(OrderBy.LATEST, description="Sorting order"),
   page: int = Query(1, gt=0, description="Page number"),
-  request_method: str = Query("requests", regex="^(requests|playwright)$")
+  request_method: RequestMethod = Query(RequestMethod.REQUESTS, description="Request method")
 ):
   """Search anime by query. Use ?request=playwright for browser mode."""
   return await get_search(query, order_by.value, page, request_method)
@@ -58,7 +58,7 @@ async def property_genre_route(
   genre: str,
   order_by: OrderBy = Query(OrderBy.LATEST, description="Sorting order"),
   page: int = Query(1, gt=0, description="Page number"),
-  request_method: str = Query("requests", regex="^(requests|playwright)$")
+  request_method: RequestMethod = Query(RequestMethod.REQUESTS, description="Request method")
 ):
   """Get anime list by genre. Use ?request=playwright for browser mode."""
   return await get_property_genre(genre, order_by.value, page, request_method)
@@ -68,7 +68,7 @@ async def detail_route(
   animeId: str,
   animeSlug: str,
   page: int = Query(1, description="Episode page number"),
-  request_method: str = Query("requests", regex="^(requests|playwright)$")
+  request_method: RequestMethod = Query(RequestMethod.REQUESTS, description="Request method")
 ):
   """Get anime details and episodes. Use ?request=playwright for browser mode."""
   return await get_anime_detail(animeId, animeSlug, page, request_method)
@@ -79,7 +79,7 @@ async def streaming_route(
   animeId: str,
   animeSlug: str,
   episodeId: str,
-  request_method: str = Query("requests", regex="^(requests|playwright)$")
+  request_method: RequestMethod = Query(RequestMethod.REQUESTS, description="Request method")
 ):
   """Get streaming URLs for an episode. Use ?request=playwright for browser mode."""
   return await get_streaming_url(animeId, animeSlug, episodeId, request_method)

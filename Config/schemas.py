@@ -28,6 +28,10 @@ class ViewType(str, Enum):
   ONGOING = "ongoing"
   FINISHED = "finished"
 
+class RequestMethod(str, Enum):
+  REQUESTS = "1"
+  PLAYWRIGHT = "2"
+
 class AnimeBase(BaseModel):
   animeId: str
   animeSlug: str
