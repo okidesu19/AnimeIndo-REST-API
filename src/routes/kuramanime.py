@@ -1,9 +1,10 @@
 
 from fastapi import APIRouter, HTTPException, Request, Query
 from src.parser.Kuramanime.kuramanime import (
-    animeView, genres, schedule, search, 
-    propertyGenre, animeDetail, streamingUrl
+    get_genres, get_anime_view, get_schedule, get_search, 
+    get_property_genre, get_anime_detail, get_streaming_url
 )
+
 from Config.schemas import OrderBy, Day, ViewType, PaginatedResponse
 from Config.config import health_check
 import logging
@@ -20,50 +21,57 @@ router = APIRouter(
 async def anime_view_route(
   view: ViewType, 
   order_by: OrderBy = Query(OrderBy.LATEST, description="Sorting order"), 
-  page: int = Query(1, gt=0, description="Page number")
+  page: int = Query(1, gt=0, description="Page number"),
+  request_method: str = Query("requests", regex="^(requests|playwright)$")
 ):
-  """Get anime list by view type (ongoing/finished)"""
-  return animeView(view.value, order_by.value, page)
+  """Get anime list by view type (ongoing/finished). Use ?request=playwright for browser mode."""
+  return await get_anime_view(view.value, order_by.value, page, request_method)
 
 @router.get("/genres")
-async def genres_route():
-  """Get list of all available genres"""
-  return genres()
+async def genres_route(
+    request_method: str = Query("requests", regex="^(requests|playwright)$")
+):
+  """Get list of all available genres. Use ?request=playwright for browser mode."""
+  return await get_genres(request_method)
 
 @router.get("/schedule/{day}", response_model=PaginatedResponse)
 async def schedule_route(
   day: Day,
   page: int = Query(1, gt=0, description="Page number"),
+  request_method: str = Query("requests", regex="^(requests|playwright)$")
 ):
-  """Get anime schedule by day"""
-  return schedule(day.value, page)
+  """Get anime schedule by day. Use ?request=playwright for browser mode."""
+  return await get_schedule(day.value, page, request_method)
 
 @router.get("/search", response_model=PaginatedResponse)
 async def search_route(
   query: str = Query(..., min_length=1, description="Search query"),
   order_by: OrderBy = Query(OrderBy.LATEST, description="Sorting order"),
   page: int = Query(1, gt=0, description="Page number"),
+  request_method: str = Query("requests", regex="^(requests|playwright)$")
 ):
-  """Search anime by query"""
-  return search(query, order_by.value, page)
+  """Search anime by query. Use ?request=playwright for browser mode."""
+  return await get_search(query, order_by.value, page, request_method)
 
 @router.get("/genre/{genre}", response_model=PaginatedResponse)
 async def property_genre_route(
   genre: str,
   order_by: OrderBy = Query(OrderBy.LATEST, description="Sorting order"),
   page: int = Query(1, gt=0, description="Page number"),
+  request_method: str = Query("requests", regex="^(requests|playwright)$")
 ):
-  """Get anime list by genre"""
-  return propertyGenre(genre, order_by.value, page)
+  """Get anime list by genre. Use ?request=playwright for browser mode."""
+  return await get_property_genre(genre, order_by.value, page, request_method)
 
 @router.get("/anime/{animeId}/{animeSlug}")
 async def detail_route(
   animeId: str,
   animeSlug: str,
-  page: str = Query("1", description="Episode page number"),
+  page: int = Query(1, description="Episode page number"),
+  request_method: str = Query("requests", regex="^(requests|playwright)$")
 ):
-  """Get anime details and episodes"""
-  return animeDetail(animeId, animeSlug, page)
+  """Get anime details and episodes. Use ?request=playwright for browser mode."""
+  return await get_anime_detail(animeId, animeSlug, page, request_method)
 
 
 @router.get("/anime/{animeId}/{animeSlug}/episode/{episodeId}")
@@ -71,9 +79,10 @@ async def streaming_route(
   animeId: str,
   animeSlug: str,
   episodeId: str,
+  request_method: str = Query("requests", regex="^(requests|playwright)$")
 ):
-  """Get streaming URLs for an episode"""
-  return await streamingUrl(animeId, animeSlug, episodeId)
+  """Get streaming URLs for an episode. Use ?request=playwright for browser mode."""
+  return await get_streaming_url(animeId, animeSlug, episodeId, request_method)
 
 @router.get("/health")
 async def health_check_route():

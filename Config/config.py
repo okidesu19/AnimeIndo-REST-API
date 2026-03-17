@@ -10,20 +10,12 @@ from urllib3.util.retry import Retry
 from urllib.parse import urlparse, quote_plus
 import json
 
-# SSH tunnel support
-try:
-    import paramiko
-    from sshtunnel import SSHTunnelForwarder
-    SSH_SUPPORT = True
-except ImportError:
-    SSH_SUPPORT = False
-
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 OTAKUDESU_URI = 'https://otakudesu.cloud'
-KURAMANIME_URI = 'https://v8.kuramanime.tel'
+KURAMANIME_URI = 'https://v17.kuramanime.ink'
 
 # Enhanced User Agents Pool
 USER_AGENTS = [
@@ -74,51 +66,7 @@ LANGUAGES = [
 class EnhancedSession:
     def __init__(self):
         self.session = requests.Session()
-        self.proxies = None
-        self.scraperapi_key = os.getenv('SCRAPERAPI_KEY')
-        self.scrapingbee_key = os.getenv('SCRAPINGBEE_KEY')
-        # Optional explicit provider selector for streaming fetches
-        # Values: PROXY, SCRAPERAPI, SCRAPINGBEE, WEBSHARE, SSH, BRIGHTDATA, PLAYWRIGHT
-        self.type_get_streaming = (os.getenv('TYPE_GET_STREAMING') or '').strip()
-        # BrightData / Luminati style outbound proxy (explicit env var)
-        self.brightdata_proxy = os.getenv('BRIGHTDATA_PROXY')
-        # SSH tunnel config (LionSSH, FastSSH, or any SSH provider)
-        self.ssh_host = os.getenv('SSH_HOST')
-        self.ssh_user = os.getenv('SSH_USER')
-        self.ssh_password = os.getenv('SSH_PASSWORD')
-        self.ssh_tunnel = None
-        # WebShare proxy config (webshare.io free proxy service)
-        self.webshare_api_key = os.getenv('WEBSHARE_API_KEY')
-        self.webshare_api_password = os.getenv('WEBSHARE_API_PASSWORD') or os.getenv('WEBSHARE_PASSWORD')
         self._setup_session()
-    
-    def _setup_ssh_tunnel(self):
-        """Setup SSH tunnel for proxy (if SSH credentials available)"""
-        if not SSH_SUPPORT:
-            logger.warning("SSH tunnel requested but sshtunnel not installed. Install: pip install sshtunnel paramiko")
-            return None
-        
-        if not (self.ssh_host and self.ssh_user):
-            return None
-        
-        try:
-            logger.info(f"Setting up SSH tunnel to {self.ssh_user}@{self.ssh_host}")
-            # Create SSH tunnel that forwards traffic
-            # Default: forward localhost:8888 -> proxy through SSH server
-            tunnel = SSHTunnelForwarder(
-                self.ssh_host,
-                ssh_username=self.ssh_user,
-                ssh_password=self.ssh_password,
-                remote_bind_address=('127.0.0.1', 8888)
-            )
-            tunnel.start()
-            self.ssh_tunnel = tunnel
-            local_proxy_url = f"http://127.0.0.1:{tunnel.local_bind_port}"
-            logger.info(f"SSH tunnel established at {local_proxy_url}")
-            return local_proxy_url
-        except Exception as e:
-            logger.error(f"Failed to setup SSH tunnel: {str(e)}")
-            return None
     
     def _setup_session(self):
         """Setup session with retry strategy and default headers"""
@@ -148,53 +96,8 @@ class EnhancedSession:
         })
         
         # DEBUG: Log all detected providers
-        logger.info(f"=== PROXY SETUP DEBUG ===")
-        logger.info(f"PROXY_URL: {bool(os.getenv('PROXY_URL'))}")
-        logger.info(f"OUTBOUND_PROXY: {bool(os.getenv('OUTBOUND_PROXY'))}")
-        logger.info(f"REQUESTS_PROXY: {bool(os.getenv('REQUESTS_PROXY'))}")
-        logger.info(f"WEBSHARE_API_KEY: {bool(self.webshare_api_key)}")
-        logger.info(f"SSH_HOST: {bool(self.ssh_host)}")
-        logger.info(f"BRIGHTDATA_PROXY: {bool(self.brightdata_proxy)}")
-        logger.info(f"SCRAPERAPI_KEY: {bool(self.scraperapi_key)}")
-        logger.info(f"SCRAPINGBEE_KEY: {bool(self.scrapingbee_key)}")
-        logger.info(f"TYPE_GET_STREAMING: {bool(self.type_get_streaming)} ({self.type_get_streaming})")
+        logger.info(f"=== SESSION SETUP DEBUG ===")
         logger.info(f"========================")
-        
-        # Setup proxy priority: 1=PROXY_URL, 2=WebShare, 3=SSH tunnel, 4=BRIGHTDATA_PROXY
-        proxy_url = os.getenv('PROXY_URL') or os.getenv('OUTBOUND_PROXY') or os.getenv('REQUESTS_PROXY')
-        if proxy_url:
-            self.proxies = {
-                'http': proxy_url,
-                'https': proxy_url
-            }
-            logger.info(f"✓ Using outbound proxy from environment: {proxy_url[:30]}...")
-        elif self.webshare_api_key:
-            # WebShare proxy (webshare.io) - free proxy service
-            webshare_proxy = f"http://{self.webshare_api_key}:{self.webshare_api_password}@proxy.webshare.io:80"
-            self.proxies = {
-                'http': webshare_proxy,
-                'https': webshare_proxy
-            }
-            logger.info(f"✓ Using WebShare proxy: proxy.webshare.io")
-        elif self.ssh_host:
-            # Try SSH tunnel as fallback proxy (LionSSH, FastSSH, or any SSH provider)
-            ssh_proxy = self._setup_ssh_tunnel()
-            if ssh_proxy:
-                self.proxies = {
-                    'http': ssh_proxy,
-                    'https': ssh_proxy
-                }
-                logger.info(f"✓ Using SSH tunnel proxy: {ssh_proxy}")
-        elif self.brightdata_proxy:
-            self.proxies = {
-                'http': self.brightdata_proxy,
-                'https': self.brightdata_proxy
-            }
-            logger.info(f"✓ Using BrightData proxy: {self.brightdata_proxy[:30]}...")
-        elif self.scraperapi_key:
-            logger.info("✓ ScraperAPI key detected — will use ScraperAPI as fallback.")
-        elif self.scrapingbee_key:
-            logger.info("✓ ScrapingBee key detected — will use ScrapingBee as fallback.")
     
     def get_random_headers(self, url=None):
         """Generate random headers for request"""
@@ -236,29 +139,11 @@ class EnhancedSession:
                 
                 logger.info(f"Making {method} request to {url} (attempt {attempt + 1})")
                 
-
-
-                request_url = url
-                # If no proxy configured, check available scraping providers in preference order
-                if not self.proxies:
-                    if self.brightdata_proxy:
-                        # brightdata_proxy should already have been set in proxies, but double-check
-                        logger.info("Routing via BrightData proxy")
-                    elif self.scraperapi_key:
-                        wrapper = f"https://api.scraperapi.com?api_key={self.scraperapi_key}&url={quote_plus(url)}&render=true"
-                        logger.info(f"Routing request via ScraperAPI for URL: {url}")
-                        request_url = wrapper
-                    elif self.scrapingbee_key:
-                        wrapper = f"https://app.scrapingbee.com/api/v1?api_key={self.scrapingbee_key}&url={quote_plus(url)}&render_js=true"
-                        logger.info(f"Routing request via ScrapingBee for URL: {url}")
-                        request_url = wrapper
-
                 response = self.session.request(
                     method=method,
-                    url=request_url,
+                    url=url,
                     headers=headers,
                     timeout=30,
-                    proxies=self.proxies,
                     **kwargs
                 )
                 
