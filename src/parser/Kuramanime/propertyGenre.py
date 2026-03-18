@@ -1,5 +1,7 @@
 import re
 import logging
+import asyncio
+import random
 from bs4 import BeautifulSoup
 from fastapi import HTTPException
 from Config.config import KURAMANIME_URI, responseRq, generate_response
@@ -9,6 +11,14 @@ from typing import Dict
 
 # Setup logging
 logger = logging.getLogger(__name__)
+
+# Enhanced User Agents for Playwright
+PLAYWRIGHT_USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+]
 
 
 class PropertyGenre:
@@ -32,7 +42,6 @@ class PropertyGenre:
             soup = BeautifulSoup(response.text, 'html.parser')
             max_page = 1
             
-            # Find max page
             nav = soup.find('nav', {'aria-label': 'Pagination Navigation'})
             if nav:
                 page_links = nav.find_all('a', href=True)
@@ -43,7 +52,6 @@ class PropertyGenre:
                         if page_number > max_page:
                             max_page = page_number
             
-            # Parse anime items
             for item in soup.select('.filter__gallery > a'):
                 anime_url = item['href']
                 match = re.search(r'anime/(\d+)/(.+)', anime_url)
@@ -83,16 +91,49 @@ class PropertyGenre:
             )
 
     async def propertyGenrePlaywright(self, genre: str, order_by: OrderBy = OrderBy.LATEST, page: int = 1) -> PaginatedResponse:
-        """Get anime list by genre using Playwright."""
+        """Get anime list by genre using Playwright with anti-detection."""
         url = f'{KURAMANIME_URI}/properties/genre/{genre}?order_by={order_by}&page={page}'
         
         logger.info(f"Fetching propertyGenre using Playwright: {url}")
         
+        await asyncio.sleep(random.uniform(0.5, 1.5))
+        
         try:
             async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
-                page_obj = await browser.new_page()
-                await page_obj.goto(url, wait_until="domcontentloaded", timeout=30000)
+                browser = await p.chromium.launch(
+                    headless=True,
+                    args=[
+                        '--disable-blink-features=AutomationControlled',
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--window-size=1920,1080',
+                    ]
+                )
+                
+                context = await browser.new_context(
+                    viewport={'width': 1920, 'height': 1080},
+                    user_agent=random.choice(PLAYWRIGHT_USER_AGENTS),
+                    locale='id-ID',
+                    timezone_id='Asia/Jakarta',
+                    extra_http_headers={
+                        'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+                        'Referer': 'https://www.google.com/',
+                    }
+                )
+                
+                page_obj = await context.new_page()
+                
+                await page_obj.add_init_script("""
+                    Object.defineProperty(navigator, 'webdriver', {
+                        get: () => undefined
+                    });
+                    window.chrome = { runtime: {} };
+                """)
+                
+                await page_obj.goto(url, wait_until="networkidle", timeout=45000)
+                
+                await asyncio.sleep(random.uniform(1, 2))
                 
                 html = await page_obj.content()
                 await browser.close()

@@ -1,4 +1,6 @@
 import logging
+import asyncio
+import random
 from bs4 import BeautifulSoup
 from fastapi import HTTPException
 from Config.config import KURAMANIME_URI, responseRq, generate_response
@@ -8,6 +10,14 @@ from typing import Dict
 
 # Setup logging
 logger = logging.getLogger(__name__)
+
+# Enhanced User Agents for Playwright
+PLAYWRIGHT_USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+]
 
 
 class Genres:
@@ -49,16 +59,50 @@ class Genres:
             )
 
     async def genresPlaywright(self) -> Dict:
-        """Get all available genres using Playwright (browser automation)"""
+        """Get all available genres using Playwright with anti-detection."""
         url = f'{KURAMANIME_URI}/properties/genre'
         
         logger.info(f"Fetching genres using Playwright: {url}")
         
+        # Random delay
+        await asyncio.sleep(random.uniform(0.5, 1.5))
+        
         try:
             async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
-                page = await browser.new_page()
-                await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                browser = await p.chromium.launch(
+                    headless=True,
+                    args=[
+                        '--disable-blink-features=AutomationControlled',
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--window-size=1920,1080',
+                    ]
+                )
+                
+                context = await browser.new_context(
+                    viewport={'width': 1920, 'height': 1080},
+                    user_agent=random.choice(PLAYWRIGHT_USER_AGENTS),
+                    locale='id-ID',
+                    timezone_id='Asia/Jakarta',
+                    extra_http_headers={
+                        'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+                        'Referer': 'https://www.google.com/',
+                    }
+                )
+                
+                page = await context.new_page()
+                
+                await page.add_init_script("""
+                    Object.defineProperty(navigator, 'webdriver', {
+                        get: () => undefined
+                    });
+                    window.chrome = { runtime: {} };
+                """)
+                
+                await page.goto(url, wait_until="networkidle", timeout=45000)
+                
+                await asyncio.sleep(random.uniform(1, 2))
                 
                 html = await page.content()
                 await browser.close()
