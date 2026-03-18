@@ -1,9 +1,16 @@
 import logging
 import asyncio
 import random
-import os
 from fastapi import HTTPException
-from Config.config import KURAMANIME_URI, generate_response, responseRq
+from Config.config import (
+    KURAMANIME_URI, 
+    generate_response, 
+    responseRq,
+    get_proxy_config,
+    get_browser_launch_args,
+    get_context_options,
+    PLAYWRIGHT_STEALTH_SCRIPT
+)
 from Config.schemas import StreamingQuality, StreamingResponse
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
@@ -13,74 +20,12 @@ from ._extract_streaming_data import _extract_streaming_data
 # Setup logging
 logger = logging.getLogger(__name__)
 
-# Enhanced User Agents for Playwright
-PLAYWRIGHT_USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
-]
-
-# Stealth script
-STEALTH_SCRIPT = """
-Object.defineProperty(navigator, 'webdriver', {
-    get: () => undefined
-});
-window.chrome = { runtime: {} };
-window.navigator.chrome = true;
-"""
-
-
-def get_proxy_config() -> dict:
-    """Get proxy configuration from environment variable"""
-    proxy_url = os.getenv('PROXY_URL', '')
-    
-    if not proxy_url:
-        return {'enabled': False}
-    
-    # Parse proxy URL: http://user:pass@proxy-host:port
-    try:
-        # Remove http:// or https:// prefix
-        proxy_parts = proxy_url.replace('http://', '').replace('https://', '').split('@')
-        
-        if len(proxy_parts) == 2:
-            # Has credentials
-            credentials, server = proxy_parts
-            username, password = credentials.split(':')
-            proxy_config = {
-                'enabled': True,
-                'server': f'http://{server}',
-                'username': username,
-                'password': password
-            }
-        else:
-            # No credentials
-            proxy_config = {
-                'enabled': True,
-                'server': f'http://{proxy_parts[0]}',
-                'username': None,
-                'password': None
-            }
-        
-        logger.info(f"Proxy enabled: {proxy_config['server']}")
-        return proxy_config
-        
-    except Exception as e:
-        logger.error(f"Failed to parse proxy URL: {e}")
-        return {'enabled': False}
-
 
 def streamingUrl(animeId: str, animeSlug: str, episodeId: str) -> Dict:
-    """
-    Default method to get streaming URL for an episode using requests + BeautifulSoup.
-    This is the default/fallback method.
-    """
+    """Get streaming URL using requests (default method)."""
     url = f'{KURAMANIME_URI}/anime/{animeId}/{animeSlug}/episode/{episodeId}'
     streaming_data = []
     print(url)
-    
-    fetch_method = None
      
     logger.info(f"Fetching streaming URL using requests (default): {url}")
     try:
@@ -96,7 +41,6 @@ def streamingUrl(animeId: str, animeSlug: str, episodeId: str) -> Dict:
         soup = BeautifulSoup(response.text, 'html.parser')
         streaming_data = _extract_streaming_data(soup, url)
         
-        fetch_method = "Requests (Default)"
         if streaming_data:
             logger.info(f"✓ Found {len(streaming_data)} sources via requests")
             return generate_response(200, 'success', {
@@ -106,7 +50,7 @@ def streamingUrl(animeId: str, animeSlug: str, episodeId: str) -> Dict:
                     "animeSlug": animeSlug,
                     "episodeId": episodeId
                 },
-                "fetchMethod": fetch_method
+                "fetchMethod": "Requests (Default)"
             })
         return generate_response(404, 'No video sources found', {})
             
@@ -120,15 +64,10 @@ def streamingUrl(animeId: str, animeSlug: str, episodeId: str) -> Dict:
 
 
 async def streamingUrlPlaywright(animeId: str, animeSlug: str, episodeId: str) -> Dict:
-    """
-    Method to get streaming URL for an episode using Playwright.
-    Uses enhanced timeout handling and retry logic.
-    """
+    """Get streaming URL using Playwright with proxy support."""
     url = f'{KURAMANIME_URI}/anime/{animeId}/{animeSlug}/episode/{episodeId}'
     streaming_data = []
     print(url)
-    
-    fetch_method = None
     
     logger.info(f"Fetching streaming URL using Playwright: {url}")
     
@@ -148,28 +87,12 @@ async def streamingUrlPlaywright(animeId: str, animeSlug: str, episodeId: str) -
                 await asyncio.sleep(delay)
             
             async with async_playwright() as p:
-                # Browser launch arguments
-                launch_args = [
-                    '--disable-blink-features=AutomationControlled',
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-accelerated-2d-canvas',
-                    '--no-first-run',
-                    '--no-zygote',
-                    '--disable-gpu',
-                    '--window-size=1920,1080',
-                    '--disable-web-security',
-                    '--allow-running-insecure-content',
-                ]
-                
+                launch_args = get_browser_launch_args()
                 launch_options = {'headless': True, 'args': launch_args}
                 
                 # Add proxy if enabled
                 if proxy_config.get('enabled'):
-                    proxy = {
-                        'server': proxy_config['server']
-                    }
+                    proxy = {'server': proxy_config['server']}
                     if proxy_config.get('username') and proxy_config.get('password'):
                         proxy['username'] = proxy_config['username']
                         proxy['password'] = proxy_config['password']
@@ -178,28 +101,11 @@ async def streamingUrlPlaywright(animeId: str, animeSlug: str, episodeId: str) -
                 
                 browser = await p.chromium.launch(**launch_options)
                 
-                context = await browser.new_context(
-                    viewport={'width': 1920, 'height': 1080},
-                    user_agent=random.choice(PLAYWRIGHT_USER_AGENTS),
-                    locale='id-ID',
-                    timezone_id='Asia/Jakarta',
-                    permissions=['geolocation'],
-                    extra_http_headers={
-                        'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                        'Referer': 'https://www.google.com/',
-                        'Sec-Fetch-Dest': 'document',
-                        'Sec-Fetch-Mode': 'navigate',
-                        'Sec-Fetch-Site': 'none',
-                        'Sec-Fetch-User': '?1',
-                        'Upgrade-Insecure-Requests': '1',
-                    }
-                )
+                context_options = get_context_options()
+                context = await browser.new_context(**context_options)
                 
                 page = await context.new_page()
-                
-                # Inject stealth scripts
-                await page.add_init_script(STEALTH_SCRIPT)
+                await page.add_init_script(PLAYWRIGHT_STEALTH_SCRIPT)
                 
                 # Use domcontentloaded - faster than networkidle
                 await page.goto(url, wait_until="domcontentloaded", timeout=45000)

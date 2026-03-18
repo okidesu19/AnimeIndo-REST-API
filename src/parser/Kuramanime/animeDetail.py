@@ -2,10 +2,17 @@ import re
 import logging
 import asyncio
 import random
-import os
 from bs4 import BeautifulSoup
 from fastapi import HTTPException
-from Config.config import KURAMANIME_URI, responseRq, generate_response
+from Config.config import (
+    KURAMANIME_URI, 
+    responseRq, 
+    generate_response,
+    get_proxy_config,
+    get_browser_launch_args,
+    get_context_options,
+    PLAYWRIGHT_STEALTH_SCRIPT
+)
 from Config.schemas import (
     AnimeDetailResponse, GenreResponse, Episode, PaginationDetail
 )
@@ -14,60 +21,6 @@ from typing import Dict
 
 # Setup logging
 logger = logging.getLogger(__name__)
-
-# Enhanced User Agents for Playwright
-PLAYWRIGHT_USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
-]
-
-# Stealth script
-STEALTH_SCRIPT = """
-Object.defineProperty(navigator, 'webdriver', {
-    get: () => undefined
-});
-window.chrome = { runtime: {} };
-window.navigator.chrome = true;
-"""
-
-
-def get_proxy_config() -> dict:
-    """Get proxy configuration from environment variable"""
-    proxy_url = os.getenv('PROXY_URL', '')
-    
-    if not proxy_url:
-        return {'enabled': False}
-    
-    # Parse proxy URL: http://user:pass@proxy-host:port
-    try:
-        proxy_parts = proxy_url.replace('http://', '').replace('https://', '').split('@')
-        
-        if len(proxy_parts) == 2:
-            credentials, server = proxy_parts
-            username, password = credentials.split(':')
-            proxy_config = {
-                'enabled': True,
-                'server': f'http://{server}',
-                'username': username,
-                'password': password
-            }
-        else:
-            proxy_config = {
-                'enabled': True,
-                'server': f'http://{proxy_parts[0]}',
-                'username': None,
-                'password': None
-            }
-        
-        logger.info(f"Proxy enabled: {proxy_config['server']}")
-        return proxy_config
-        
-    except Exception as e:
-        logger.error(f"Failed to parse proxy URL: {e}")
-        return {'enabled': False}
 
 
 class AnimeDetail:
@@ -167,20 +120,15 @@ class AnimeDetail:
             import traceback
             traceback.print_exc()
             print(e)
-            raise HTTPException(
-                status_code=500, 
-                detail=str(e)
-            )
+            raise HTTPException(status_code=500, detail=str(e))
 
     async def animeDetailPlaywright(self, animeId: str, animeSlug: str, page: int = 1) -> Dict:
-        """Get anime details by ID and slug using Playwright with enhanced timeout handling."""
+        """Get anime details using Playwright with proxy support."""
         uri = f'{KURAMANIME_URI}/anime/{animeId}/{animeSlug}?page={page}'
         
         logger.info(f"Fetching animeDetail using Playwright: {uri}")
         
-        # Get proxy configuration
         proxy_config = get_proxy_config()
-        
         await asyncio.sleep(random.uniform(0.5, 1.5))
         
         max_retries = 3
@@ -194,26 +142,11 @@ class AnimeDetail:
                     await asyncio.sleep(delay)
                 
                 async with async_playwright() as p:
-                    # Browser launch arguments
-                    launch_args = [
-                        '--disable-blink-features=AutomationControlled',
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--disable-dev-shm-usage',
-                        '--disable-accelerated-2d-canvas',
-                        '--no-first-run',
-                        '--no-zygote',
-                        '--disable-gpu',
-                        '--window-size=1920,1080',
-                    ]
-                    
+                    launch_args = get_browser_launch_args()
                     launch_options = {'headless': True, 'args': launch_args}
                     
-                    # Add proxy if enabled
                     if proxy_config.get('enabled'):
-                        proxy = {
-                            'server': proxy_config['server']
-                        }
+                        proxy = {'server': proxy_config['server']}
                         if proxy_config.get('username') and proxy_config.get('password'):
                             proxy['username'] = proxy_config['username']
                             proxy['password'] = proxy_config['password']
@@ -222,31 +155,13 @@ class AnimeDetail:
                     
                     browser = await p.chromium.launch(**launch_options)
                     
-                    context = await browser.new_context(
-                        viewport={'width': 1920, 'height': 1080},
-                        user_agent=random.choice(PLAYWRIGHT_USER_AGENTS),
-                        locale='id-ID',
-                        timezone_id='Asia/Jakarta',
-                        permissions=['geolocation'],
-                        extra_http_headers={
-                            'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
-                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                            'Referer': 'https://www.google.com/',
-                            'Sec-Fetch-Dest': 'document',
-                            'Sec-Fetch-Mode': 'navigate',
-                            'Sec-Fetch-Site': 'none',
-                        }
-                    )
+                    context_options = get_context_options()
+                    context = await browser.new_context(**context_options)
                     
                     page_obj = await context.new_page()
+                    await page_obj.add_init_script(PLAYWRIGHT_STEALTH_SCRIPT)
                     
-                    # Inject stealth scripts
-                    await page_obj.add_init_script(STEALTH_SCRIPT)
-                    
-                    # Use domcontentloaded - faster than networkidle
                     await page_obj.goto(uri, wait_until="domcontentloaded", timeout=45000)
-                    
-                    # Random delay
                     await asyncio.sleep(random.uniform(1, 2))
                     
                     html = await page_obj.content()
@@ -349,6 +264,6 @@ class AnimeDetail:
                 continue
         
         raise HTTPException(
-            status_code=504, 
-            detail=f"Playwright timeout after {max_retries} attempts: {last_error}. Try using requests method instead."
+            status_code=504,
+            detail=f"Playwright timeout after {max_retries} attempts: {last_error}"
         )
